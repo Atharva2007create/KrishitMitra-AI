@@ -9,7 +9,11 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
+.venv*/
+.deps/
 
 # Node / Expo
 node_modules/
@@ -17,6 +21,8 @@ node_modules/
 .expo/
 dist/
 coverage/
+web-build/
+*.tsbuildinfo
 
 # Editors / OS
 .vscode/
@@ -27,3 +33,4 @@ Thumbs.db
 # Local artifacts
 *.log
 tmp/
+postgres-data/

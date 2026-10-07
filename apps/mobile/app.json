@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "KrishiMitra AI",
+    "slug": "krishimitra-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.krishimitra.mobile"
+    },
+    "android": {
+      "package": "ai.krishimitra.mobile"
+    }
+  }
+}

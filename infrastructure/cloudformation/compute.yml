@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KrishiMitra AI Phase 1 low-cost development EC2 foundation
+
+Parameters:
+  SubnetId: { Type: AWS::EC2::Subnet::Id }
+  AmiId: { Type: AWS::EC2::Image::Id }
+  BackendSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  DatabaseSecretArn: { Type: String }
+  DocumentsBucketName: { Type: String }
+  ImagesBucketName: { Type: String }
+
+Resources:
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /krishimitra/dev/ec2
+      RetentionInDays: 14
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  BackendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: krishimitra-dev-backend-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: krishimitra-development-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:ListBucket, s3:GetBucketLocation]
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}
+                  - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/connectivity/*
+                  - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/connectivity/*
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecretArn
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  BackendInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: krishimitra-dev-backend-profile
+      Roles: [!Ref BackendRole]
+
+  BackendInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: BackendLogGroup
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref BackendInstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds: [!Ref BackendSecurityGroupId]
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: enabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 8
+            VolumeType: gp3
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf install -y docker python3-pip
+          dnf install -y amazon-cloudwatch-agent || true
+          systemctl enable --now docker
+          useradd --system --home /opt/krishimitra --shell /sbin/nologin krishimitra || true
+          mkdir -p /opt/krishimitra
+          cat > /opt/krishimitra/main.py <<'PY'
+          from fastapi import FastAPI
+          app = FastAPI(title="KrishiMitra AI", version="0.1.0")
+          @app.get("/health")
+          async def health():
+              return {"status": "ok"}
+          PY
+          python3 -m pip install --upgrade fastapi 'uvicorn[standard]'
+          chown -R krishimitra:krishimitra /opt/krishimitra
+          cat > /etc/systemd/system/krishimitra.service <<'UNIT'
+          [Unit]
+          Description=KrishiMitra Phase 1 FastAPI foundation
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          User=krishimitra
+          WorkingDirectory=/opt/krishimitra
+          ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+          Restart=always
+          RestartSec=5
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          systemctl daemon-reload
+          systemctl enable --now krishimitra
+          if [ -x /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'JSON'
+          {"agent":{"metrics_collection_interval":60},"logs":{"logs_collected":{"files":{"collect_list":[{"file_path":"/var/log/messages","log_group_name":"/krishimitra/dev/ec2","log_stream_name":"{instance_id}"}]}}}}
+          JSON
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json || true
+          fi
+      Tags:
+        - { Key: Name, Value: krishimitra-dev-backend }
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+Outputs:
+  BackendInstanceId: { Value: !Ref BackendInstance }
+  BackendPublicIp: { Value: !GetAtt BackendInstance.PublicIp }
+  BackendHealthUrl: { Value: !Sub "http://${BackendInstance.PublicIp}:8000/health" }
+  BackendRoleName: { Value: !Ref BackendRole }

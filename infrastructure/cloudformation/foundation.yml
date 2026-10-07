@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KrishiMitra AI Phase 1 low-cost development foundation (non-database)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: development
+
+Resources:
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: !Ref Environment }
+
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireDevelopmentImages
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration: { NoncurrentDays: 7 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: !Ref Environment }
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: krishimitra-dev-users
+      UsernameAttributes: [phone_number, email]
+      AutoVerifiedAttributes: [email]
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      DeletionProtection: INACTIVE
+      MfaConfiguration: "OFF"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      UserPoolTags:
+        Project: KrishiMitra-AI
+        Environment: !Ref Environment
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: krishimitra-dev-public-clients
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: administrators
+      Description: KrishiMitra development administrators
+      UserPoolId: !Ref UserPool
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: krishimitra-dev-image-foundation-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: write-own-logs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/krishimitra-dev-image-foundation:*
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: !Ref Environment }
+
+  ImageFoundationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/krishimitra-dev-image-foundation
+      RetentionInDays: 14
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: !Ref Environment }
+
+  ImageFoundationFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ImageFoundationLogGroup
+    Properties:
+      FunctionName: krishimitra-dev-image-foundation
+      Description: Phase 1 health-only foundation; no image analysis
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": json.dumps({"status": "ok", "service": "krishimitra-image-foundation", "request_id": context.aws_request_id})}
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: !Ref Environment }
+
+Outputs:
+  DocumentsBucketName: { Value: !Ref DocumentsBucket }
+  ImagesBucketName: { Value: !Ref ImagesBucket }
+  UserPoolId: { Value: !Ref UserPool }
+  UserPoolClientId: { Value: !Ref UserPoolClient }
+  LambdaFunctionName: { Value: !Ref ImageFoundationFunction }

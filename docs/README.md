@@ -16,6 +16,10 @@
 | [11 Testing strategy](11-testing-strategy.md) | Future verification and RAG evaluation plan |
 | [12 Roadmap](12-implementation-roadmap.md) | Phase dependencies and gates |
 | [13 Architecture decisions](13-architecture-decisions.md) | Compact ADR set for fixed choices |
+| [13 Phase 1 development setup](13-phase-1-development-setup.md) | Executable foundation and connectivity model |
+| [14 Phase 1 AWS resources](14-phase-1-aws-resources.md) | Live inventory, cost and security status |
+| [15 Local development guide](15-local-development-guide.md) | Startup, validation and phase boundaries |
+| [16 Phase 1 verification report](16-phase-1-verification-report.md) | Executed checks, exceptions and deployment blockers |
 
 ## Status vocabulary
 

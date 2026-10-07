@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --ink: #142319;
+  --muted: #526157;
+  --surface: #ffffff;
+  --line: #dce7de;
+  --brand: #236b3a;
+  --wash: #eff8f0;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: var(--wash); }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, #d9efd9 0, transparent 32rem),
+    linear-gradient(145deg, #f8fbf8, #edf6ef);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+main {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 5vw, 4rem);
+}
+
+.shell {
+  width: min(100%, 46rem);
+  padding: clamp(1.5rem, 5vw, 3.5rem);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 1.25rem 4rem rgba(20, 54, 30, 0.12);
+}
+
+.mark {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.9rem;
+  background: var(--brand);
+  color: white;
+  font-weight: 800;
+}
+
+.eyebrow {
+  margin: 1.5rem 0 0.5rem;
+  color: var(--brand);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 { margin: 0; font-size: clamp(2.25rem, 8vw, 4.75rem); line-height: 0.98; }
+.lede { margin: 1rem 0 2rem; color: var(--muted); font-size: clamp(1rem, 2vw, 1.25rem); }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: #f8fbf8;
+  text-transform: capitalize;
+}
+
+.dot { width: 0.75rem; height: 0.75rem; flex: 0 0 auto; border-radius: 50%; background: #a46b00; }
+.dot--connected { background: #16843c; }
+.dot--offline { background: #c53030; }
+.note { margin: 1rem 0 0; color: var(--muted); font-size: 0.875rem; }
+
+@media (max-width: 480px) {
+  main { align-items: stretch; padding: 0.75rem; }
+  .shell { margin: auto 0; border-radius: 1.1rem; }
+  .status { align-items: flex-start; flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}

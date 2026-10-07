@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KrishiMitra AI Phase 1 restricted development PostgreSQL foundation
+
+Parameters:
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SubnetIds: { Type: List<AWS::EC2::Subnet::Id> }
+
+Resources:
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: KrishiMitra development FastAPI health access; no SSH
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+          Description: Temporary development health endpoint
+      Tags:
+        - { Key: Name, Value: krishimitra-dev-backend-sg }
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: PostgreSQL reachable only from KrishiMitra backend
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+          Description: PostgreSQL from backend only
+      Tags:
+        - { Key: Name, Value: krishimitra-dev-db-sg }
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: KrishiMitra development database subnets
+      DBSubnetGroupName: krishimitra-dev-db-subnets
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: krishimitra-dev-db
+      DBName: krishimitra
+      Engine: postgres
+      EngineVersion: "17.11"
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: "20"
+      MaxAllocatedStorage: 25
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: krishimitra_admin
+      ManageMasterUserPassword: true
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 1
+      CopyTagsToSnapshot: true
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      EnablePerformanceInsights: false
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+Outputs:
+  BackendSecurityGroupId: { Value: !Ref BackendSecurityGroup }
+  DatabaseSecurityGroupId: { Value: !Ref DatabaseSecurityGroup }
+  DatabaseIdentifier: { Value: !Ref Database }
+  DatabaseEndpoint: { Value: !GetAtt Database.Endpoint.Address }
+  DatabasePort: { Value: !GetAtt Database.Endpoint.Port }
+  DatabaseSecretArn: { Value: !GetAtt Database.MasterUserSecret.SecretArn }
