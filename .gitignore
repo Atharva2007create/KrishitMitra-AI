@@ -32,5 +32,6 @@ Thumbs.db
 
 # Local artifacts
 *.log
+*.tar.gz
 tmp/
 postgres-data/

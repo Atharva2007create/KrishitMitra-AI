@@ -7,6 +7,28 @@ Parameters:
     Default: development
 
 Resources:
+  CognitoSmsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: krishimitra-dev-cognito-sms-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cognito-idp.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub ${AWS::StackName}-cognito-sms
+      Policies:
+        - PolicyName: send-cognito-otp
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: "*"
+
   DocumentsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -54,7 +76,7 @@ Resources:
     Properties:
       UserPoolName: krishimitra-dev-users
       UsernameAttributes: [phone_number, email]
-      AutoVerifiedAttributes: [email]
+      AutoVerifiedAttributes: [email, phone_number]
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
@@ -68,6 +90,12 @@ Resources:
           RequireNumbers: true
           RequireSymbols: true
           RequireUppercase: true
+        SignInPolicy:
+          AllowedFirstAuthFactors: [PASSWORD, SMS_OTP]
+      SmsConfiguration:
+        ExternalId: !Sub ${AWS::StackName}-cognito-sms
+        SnsCallerArn: !GetAtt CognitoSmsRole.Arn
+        SnsRegion: !Ref AWS::Region
       UserPoolTags:
         Project: KrishiMitra-AI
         Environment: !Ref Environment
@@ -82,6 +110,7 @@ Resources:
       EnableTokenRevocation: true
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_AUTH
         - ALLOW_USER_SRP_AUTH
 
   AdminGroup:

@@ -1,21 +1,32 @@
+from collections.abc import AsyncIterator
 from typing import cast
 
-import asyncpg  # type: ignore[import-untyped]
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.settings import get_settings
 
+settings = get_settings()
+if settings.app_env == "test":
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+else:
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 
-def _asyncpg_url(url: str) -> str:
-    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+async def get_db() -> AsyncIterator[AsyncSession]:
+    async with SessionFactory() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def check_database() -> bool:
-    connection: asyncpg.Connection | None = None
     try:
-        connection = await asyncpg.connect(_asyncpg_url(get_settings().database_url), timeout=3)
-        return cast(int, await connection.fetchval("SELECT 1")) == 1
-    except (OSError, asyncpg.PostgresError):
+        async with engine.connect() as connection:
+            return cast(int, await connection.scalar(text("SELECT 1"))) == 1
+    except (OSError, RuntimeError):
         return False
-    finally:
-        if connection is not None:
-            await connection.close()

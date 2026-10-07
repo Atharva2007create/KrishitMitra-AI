@@ -1,4 +1,4 @@
-# Phase 0 documentation index
+# Project documentation index
 
 | Document | Purpose |
 |---|---|
@@ -20,6 +20,10 @@
 | [14 Phase 1 AWS resources](14-phase-1-aws-resources.md) | Live inventory, cost and security status |
 | [15 Local development guide](15-local-development-guide.md) | Startup, validation and phase boundaries |
 | [16 Phase 1 verification report](16-phase-1-verification-report.md) | Executed checks, exceptions and deployment blockers |
+| [17 Phase 2 database](17-phase-2-database.md) | Implemented schema, migrations, constraints and RDS procedure |
+| [18 Phase 2 authentication](18-phase-2-authentication.md) | Cognito JWT validation, role mapping and admin bootstrap |
+| [19 Phase 2 core API](19-phase-2-core-api.md) | Implemented endpoints, ownership rules and rate-limit strategy |
+| [20 Phase 2 testing](20-phase-2-testing.md) | Quality gates, security tests and deployment verification |
 
 ## Status vocabulary
 
@@ -27,4 +31,4 @@
 - **Assumption:** working design choice to validate during implementation.
 - **External verification required:** availability, terms, format, freshness, or access must be checked against the authoritative source before integration.
 
-No document in this directory is evidence that an integration or deployed feature exists.
+Implementation claims in Phase 2 documents are backed by the verification record in document 20.

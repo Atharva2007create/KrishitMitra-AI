@@ -1,6 +1,6 @@
 # KrishiMitra AI
 
-KrishiMitra AI is a planned government-evidence-backed farmer assistant. V1 is limited to Tur (pigeonpea). Phase 1 supplies development foundations only; it does not contain farmer/admin workflows, Gemini, RAG, government integrations, production schemas, image analysis, weather, markets, or final UI.
+KrishiMitra AI is a government-evidence-backed farmer assistant. V1 is limited to Tur (pigeonpea). Phase 2 provides the relational data model, Cognito JWT authentication, role-based authorization, farmer-owned core APIs, migrations, and tests. AI, RAG, ingestion, image diagnosis, weather, markets, and final UI remain out of scope.
 
 ## Architecture
 
@@ -11,10 +11,10 @@ Responsive Next.js web and React Native/Expo mobile clients share one versioned 
 ```text
 apps/web/                 Next.js + TypeScript + Tailwind status shell
 apps/mobile/              Expo + React Native + TypeScript status shell
-backend/                  FastAPI health/readiness foundation and tests
+backend/                  FastAPI core API, Alembic migrations, security and tests
 infrastructure/           CloudFormation and Lambda foundation source
 scripts/                  Local database initialization
-docs/                     Phase 0 contract and Phase 1 guides/inventory
+docs/                     Phase 0 contract plus Phase 1 and Phase 2 guides
 .github/workflows/        Non-deploying CI
 docker-compose.yml        FastAPI + PostgreSQL/pgvector development stack
 ```
@@ -85,9 +85,11 @@ Validate without an emulator using `npm run lint`, `npm run typecheck`, and `npx
 
 ## AWS development
 
-AWS creation and verification are recorded in [Phase 1 AWS resources](docs/14-phase-1-aws-resources.md). Never use the AWS root account. The tracked CloudFormation template creates only the non-database foundation. Chargeable EC2/RDS/Amplify resources require explicit inventory and cleanup awareness.
+AWS creation and verification are recorded in [Phase 1 AWS resources](docs/14-phase-1-aws-resources.md) and the [Phase 2 testing record](docs/20-phase-2-testing.md). Never use the AWS root account. Chargeable EC2/RDS/Amplify/Cognito messaging resources require explicit inventory and cleanup awareness.
 
 Phase 1 development shell: <https://main.d32qjrxuwdvdbd.amplifyapp.com>
+
+Phase 2 API: <https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com/docs>
 
 ## Troubleshooting
 
@@ -100,4 +102,4 @@ Phase 1 development shell: <https://main.d32qjrxuwdvdbd.amplifyapp.com>
 
 ## Status
 
-Phase 1 source, CI, Docker environment, AWS foundation, hosted web shell, and HTTPS connectivity are verified. See the [verification report](docs/16-phase-1-verification-report.md). Phase 2 must not begin without explicit authorization.
+Phase 0 and Phase 1 are complete. Phase 2 implements the database, authentication, RBAC, and core backend described in the [Phase 2 documentation](docs/README.md). Phase 3 AI/RAG work has not started.

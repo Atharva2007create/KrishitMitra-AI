@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: KrishiMitra AI Phase 1 HTTPS API facade for the development backend
+Description: KrishiMitra AI HTTPS API facade for the development backend
 
 Parameters:
   BackendOriginUrl:
@@ -15,7 +15,7 @@ Resources:
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins: [!Ref WebOrigin]
-        AllowMethods: [GET, OPTIONS]
+        AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
         AllowHeaders: [Content-Type, Authorization]
         MaxAge: 300
       Tags:

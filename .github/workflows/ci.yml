@@ -11,6 +11,22 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: krishimitra_test
+          POSTGRES_USER: krishimitra
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U krishimitra -d krishimitra_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://krishimitra:ci-only-password@localhost:5432/krishimitra_test
     defaults: { run: { working-directory: backend } }
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +36,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy app
+      - run: mypy app scripts
+      - run: alembic upgrade head
+      - run: alembic downgrade base
+      - run: alembic upgrade head
       - run: pytest
 
   web:
