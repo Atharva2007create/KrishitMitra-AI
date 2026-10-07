@@ -87,6 +87,8 @@ Validate without an emulator using `npm run lint`, `npm run typecheck`, and `npx
 
 AWS creation and verification are recorded in [Phase 1 AWS resources](docs/14-phase-1-aws-resources.md). Never use the AWS root account. The tracked CloudFormation template creates only the non-database foundation. Chargeable EC2/RDS/Amplify resources require explicit inventory and cleanup awareness.
 
+Phase 1 development shell: <https://main.d32qjrxuwdvdbd.amplifyapp.com>
+
 ## Troubleshooting
 
 - Backend offline in web/mobile: confirm Docker is healthy and the configured API URL is reachable.
@@ -98,4 +100,4 @@ AWS creation and verification are recorded in [Phase 1 AWS resources](docs/14-ph
 
 ## Status
 
-Phase 1 source and AWS foundation are implemented. See the [verification report](docs/16-phase-1-verification-report.md) for passed checks and remaining GitHub OAuth/deployment blockers. Phase 2 must not begin without explicit authorization.
+Phase 1 source, CI, Docker environment, AWS foundation, hosted web shell, and HTTPS connectivity are verified. See the [verification report](docs/16-phase-1-verification-report.md). Phase 2 must not begin without explicit authorization.

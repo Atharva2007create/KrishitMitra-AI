@@ -10,18 +10,22 @@ Primary region: `ap-south-1` (Asia Pacific — Mumbai). Inventory verified on 20
 
 ## Inventory
 
-| Service | Resource | Purpose | Cost | Status |
-|---|---|---|---|---|
-| S3 | `krishimitra-dev-foundation-documentsbucket-scmqkzjtgvrf` | Private, encrypted, versioned official-source originals | Storage/requests may cost | Created and verified |
-| S3 | `krishimitra-dev-foundation-imagesbucket-6u8bvoyzwbb5` | Private, encrypted, versioned crop images; lifecycle enabled | Storage/requests may cost | Created and verified |
-| Cognito | `krishimitra-dev-users` / `ap-south-1_vMA5dFymW` | Development identity foundation | Usage/SMS may cost | Created; OTP flow deferred |
-| Lambda | `krishimitra-dev-image-foundation` | Health-only future image-workflow foundation | Invocations/logs may cost | Invocation passed |
-| CloudWatch | `/aws/lambda/krishimitra-dev-image-foundation`, `/krishimitra/dev/ec2` | Logs with 14-day retention | Ingestion/storage may cost | Created |
-| RDS | `krishimitra-dev-db` (`db.t4g.micro`) | PostgreSQL 17.11 with pgvector 0.8.2 | **Ongoing charge while provisioned** | Private; connectivity passed |
-| EC2 | `i-09e183b76df0f2546` (`t3.micro`) | Minimal FastAPI development host through SSM | **Ongoing charge while running** | Health passed |
-| Amplify | `krishimitra-dev-web` / `d32qjrxuwdvdbd` | Next.js development hosting | Build/hosting may cost | App/branch created; repo connection blocked |
+| Service | Resource | Region | Environment | Purpose | Cost | Status |
+|---|---|---|---|---|---|---|
+| S3 | `krishimitra-dev-foundation-documentsbucket-scmqkzjtgvrf` | ap-south-1 | development | Private, encrypted, versioned official-source originals | Storage/requests may cost | Created and verified |
+| S3 | `krishimitra-dev-foundation-imagesbucket-6u8bvoyzwbb5` | ap-south-1 | development | Private, encrypted, versioned crop images; lifecycle enabled | Storage/requests may cost | Created and verified |
+| Cognito | `krishimitra-dev-users` / `ap-south-1_vMA5dFymW` | ap-south-1 | development | Development identity foundation | Usage/SMS may cost | Created; OTP flow deferred |
+| Lambda | `krishimitra-dev-image-foundation` | ap-south-1 | development | Health-only future image-workflow foundation | Invocations/logs may cost | Invocation passed |
+| CloudWatch | `/aws/lambda/krishimitra-dev-image-foundation`, `/krishimitra/dev/ec2` | ap-south-1 | development | Logs with 14-day retention | Ingestion/storage may cost | Created |
+| RDS | `krishimitra-dev-db` (`db.t4g.micro`) | ap-south-1 | development | PostgreSQL 17.11 with pgvector 0.8.2 | **Ongoing charge while provisioned** | Private; connectivity passed |
+| EC2 | `i-09e183b76df0f2546` (`t3.micro`) | ap-south-1 | development | Minimal FastAPI development host through SSM | **Ongoing charge while running** | Health passed |
+| API Gateway | `krishimitra-dev-api` | ap-south-1 | development | Managed HTTPS facade for the development health API | Requests may cost | Created and verified |
+| Amplify | `krishimitra-dev-web` / `d32qjrxuwdvdbd` | ap-south-1 | development | Next.js development hosting | Build/hosting may cost | Manual deployment job 3 passed |
 
-CloudFormation stacks `krishimitra-dev-foundation`, `krishimitra-dev-database`, and `krishimitra-dev-compute` reached `CREATE_COMPLETE`.
+CloudFormation stacks `krishimitra-dev-foundation`, `krishimitra-dev-database`, `krishimitra-dev-compute`, and `krishimitra-dev-api` are healthy (`CREATE_COMPLETE` or `UPDATE_COMPLETE`).
+
+- Web: `https://main.d32qjrxuwdvdbd.amplifyapp.com`
+- HTTPS API: `https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com`
 
 ## Security validation
 
@@ -31,6 +35,6 @@ Both buckets have all public access blocked, AES-256 server-side encryption, and
 
 RDS credentials are generated and held in Secrets Manager. Runtime roles provide AWS access. No credential is committed. Phone auto-verification/custom OTP is deliberately deferred; Phase 2 must define SMS delivery, spending controls, and the reviewed farmer flow before enabling it.
 
-## Known deployment blocker
+## Deployment method
 
-The Amplify app exists, but repository connection requires interactive GitHub OAuth authorization unavailable to the CLI session. No deployment is claimed. After pushing the Phase 1 commit, connect `main` in Amplify and configure an HTTPS API endpoint; an HTTPS page must not call the current plain-HTTP development endpoint.
+GitHub OAuth was unavailable in the automation session, so the Phase 1 static export was deployed directly through Amplify's manual deployment API. Deployment and verification passed. GitHub Actions independently validates every pushed commit; repository-connected Amplify deployments can be enabled later without changing the Phase 1 application architecture.

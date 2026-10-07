@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KrishiMitra AI Phase 1 HTTPS API facade for the development backend
+
+Parameters:
+  BackendOriginUrl:
+    Type: String
+  WebOrigin:
+    Type: String
+
+Resources:
+  DevelopmentApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: krishimitra-dev-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: [!Ref WebOrigin]
+        AllowMethods: [GET, OPTIONS]
+        AllowHeaders: [Content-Type, Authorization]
+        MaxAge: 300
+      Tags:
+        Project: KrishiMitra-AI
+        Environment: development
+
+  BackendIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref DevelopmentApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !Ref BackendOriginUrl
+      PayloadFormatVersion: "1.0"
+      RequestParameters:
+        "overwrite:path": "$request.path"
+
+  RootRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref DevelopmentApi
+      RouteKey: "ANY /"
+      Target: !Sub integrations/${BackendIntegration}
+
+  ProxyRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref DevelopmentApi
+      RouteKey: "ANY /{proxy+}"
+      Target: !Sub integrations/${BackendIntegration}
+
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref DevelopmentApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+      Tags:
+        Project: KrishiMitra-AI
+        Environment: development
+
+Outputs:
+  ApiBaseUrl:
+    Value: !GetAtt DevelopmentApi.ApiEndpoint
+  HealthUrl:
+    Value: !Sub ${DevelopmentApi.ApiEndpoint}/health
