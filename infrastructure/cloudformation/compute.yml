@@ -52,7 +52,9 @@ Resources:
                   - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/connectivity/*
                   - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/government/*
                   - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/processed/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/attachments/*
                   - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/connectivity/*
+                  - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/attachments/*
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseSecretArn

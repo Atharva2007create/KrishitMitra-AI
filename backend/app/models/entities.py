@@ -27,12 +27,17 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import (
     AreaUnit,
+    AttachmentSource,
+    AttachmentStatus,
+    AttachmentType,
     CropCycleStatus,
+    EvidenceStatus,
     IngestionStatus,
     KnowledgeTopic,
     Language,
     RecordStatus,
     SenderType,
+    SessionOrigin,
     TriggerType,
     TrustStatus,
     UserRole,
@@ -128,6 +133,15 @@ class ChatSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     crop_cycle_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("crop_cycles.id", ondelete="SET NULL")
     )
+    problem_category_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("problem_categories.id", ondelete="SET NULL")
+    )
+    selected_faq_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("faq_items.id", ondelete="SET NULL")
+    )
+    origin_type: Mapped[SessionOrigin] = mapped_column(
+        Enum(SessionOrigin, name="session_origin"), default=SessionOrigin.DIRECT, nullable=False
+    )
     title: Mapped[str | None] = mapped_column(String(200))
     language: Mapped[Language] = mapped_column(Enum(Language, name="chat_language"), nullable=False)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -144,8 +158,126 @@ class Message(UUIDPrimaryKeyMixin, Base):
         Enum(SenderType, name="sender_type"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[Language | None] = mapped_column(Enum(Language, name="message_language"))
+    intent: Mapped[str | None] = mapped_column(String(80))
+    evidence_status: Mapped[EvidenceStatus | None] = mapped_column(
+        Enum(EvidenceStatus, name="evidence_status")
+    )
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ProblemCategory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "problem_categories"
+    __table_args__ = (Index("ix_problem_categories_active_order", "is_active", "display_order"),)
+    code: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    display_name_en: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_name_hi: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_name_mr: Mapped[str] = mapped_column(String(160), nullable=False)
+    description_en: Mapped[str] = mapped_column(String(500), nullable=False)
+    description_hi: Mapped[str] = mapped_column(String(500), nullable=False)
+    description_mr: Mapped[str] = mapped_column(String(500), nullable=False)
+    icon_key: Mapped[str | None] = mapped_column(String(80))
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    requires_live_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
+
+
+class FaqItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "faq_items"
+    __table_args__ = (
+        Index(
+            "ix_faq_items_category_active_order",
+            "problem_category_id",
+            "is_active",
+            "display_order",
+        ),
+    )
+    problem_category_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("problem_categories.id", ondelete="RESTRICT"), nullable=False
+    )
+    canonical_question: Mapped[str] = mapped_column(Text, nullable=False)
+    question_en: Mapped[str] = mapped_column(Text, nullable=False)
+    question_hi: Mapped[str] = mapped_column(Text, nullable=False)
+    question_mr: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_en: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_hi: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_mr: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_status: Mapped[EvidenceStatus] = mapped_column(
+        Enum(EvidenceStatus, name="faq_evidence_status"), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
+
+
+class FaqCitation(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "faq_citations"
+    __table_args__ = (
+        Index("ix_faq_citations_faq", "faq_id"),
+        CheckConstraint("citation_order >= 0", name="faq_citation_order_non_negative"),
+    )
+    faq_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("faq_items.id", ondelete="CASCADE"), nullable=False
+    )
+    knowledge_chunk_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("knowledge_chunks.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_document_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("source_documents.id", ondelete="RESTRICT"), nullable=False
+    )
+    citation_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ResponseCitation(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "response_citations"
+    __table_args__ = (Index("ix_response_citations_message", "message_id"),)
+    message_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    knowledge_chunk_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("knowledge_chunks.id", ondelete="RESTRICT"), nullable=False
+    )
+    citation_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MessageAttachment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "message_attachments"
+    __table_args__ = (
+        CheckConstraint("file_size IS NULL OR file_size > 0", name="attachment_size_positive"),
+        Index("ix_message_attachments_owner", "user_id", "chat_session_id"),
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    message_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    chat_session_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    attachment_type: Mapped[AttachmentType] = mapped_column(
+        Enum(AttachmentType, name="attachment_type"), nullable=False
+    )
+    source_type: Mapped[AttachmentSource] = mapped_column(
+        Enum(AttachmentSource, name="attachment_source"), nullable=False
+    )
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    s3_key: Mapped[str | None] = mapped_column(String(1024))
+    file_size: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[AttachmentStatus] = mapped_column(
+        Enum(AttachmentStatus, name="attachment_status"), nullable=False
     )
 
 
@@ -285,7 +417,8 @@ class Feedback(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (
         CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="rating_range"),
         CheckConstraint(
-            "message_id IS NOT NULL OR image_analysis_id IS NOT NULL OR comment IS NOT NULL",
+            "message_id IS NOT NULL OR image_analysis_id IS NOT NULL "
+            "OR faq_id IS NOT NULL OR comment IS NOT NULL",
             name="has_target_or_comment",
         ),
         Index("ix_feedback_user_id", "user_id"),
@@ -298,6 +431,9 @@ class Feedback(UUIDPrimaryKeyMixin, Base):
     )
     image_analysis_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("image_analyses.id", ondelete="RESTRICT")
+    )
+    faq_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("faq_items.id", ondelete="RESTRICT")
     )
     rating: Mapped[int | None] = mapped_column(Integer)
     is_helpful: Mapped[bool | None]

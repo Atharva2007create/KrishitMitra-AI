@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.connection import get_db
-from app.models.entities import ChatSession, Feedback, ImageAnalysis, Message
+from app.models.entities import ChatSession, FaqItem, Feedback, ImageAnalysis, Message
 from app.schemas.domain import FeedbackCreate, FeedbackResponse
 from app.security.dependencies import FarmerUser
 
@@ -34,6 +34,12 @@ async def create_feedback(
         )
         if analysis is None:
             raise HTTPException(status_code=404, detail="Image analysis not found")
+    if payload.faq_id is not None:
+        faq = await session.scalar(
+            select(FaqItem).where(FaqItem.id == payload.faq_id, FaqItem.is_active.is_(True))
+        )
+        if faq is None:
+            raise HTTPException(status_code=404, detail="FAQ not found")
     feedback = Feedback(user_id=current_user.id, **payload.model_dump())
     session.add(feedback)
     await session.commit()

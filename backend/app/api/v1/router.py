@@ -1,6 +1,19 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.v1 import admin, chat, crop_cycles, farms, feedback, knowledge, me, profiles, sources
+from app.api.v1 import (
+    admin,
+    assistance,
+    attachments,
+    categories,
+    chat,
+    crop_cycles,
+    farms,
+    feedback,
+    knowledge,
+    me,
+    profiles,
+    sources,
+)
 from app.db.connection import check_database
 
 router = APIRouter()
@@ -13,6 +26,9 @@ router.include_router(feedback.router)
 router.include_router(admin.router)
 router.include_router(knowledge.router)
 router.include_router(sources.router)
+router.include_router(categories.router)
+router.include_router(assistance.router)
+router.include_router(attachments.router)
 
 
 @router.get("/ready", tags=["system"])

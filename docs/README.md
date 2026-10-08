@@ -30,6 +30,13 @@
 | [24 Phase 3 source provenance](24-phase-3-source-provenance.md) | Citation chain and safety controls |
 | [25 Phase 3 RAG evaluation](25-phase-3-rag-evaluation.md) | 60-question dataset and quality gates |
 | [26 Phase 3 verification](26-phase-3-verification.md) | Executed checks, deployment evidence and remaining blockers |
+| [27 Phase 4 guided assistance](27-phase-4-guided-assistance.md) | Problem-first flow and orchestration architecture |
+| [28 Phase 4 problem categories](28-phase-4-problem-categories.md) | V1 categories, translations and RAG mappings |
+| [29 Phase 4 FAQ system](29-phase-4-faq-system.md) | Controlled grounded FAQ lifecycle and APIs |
+| [30 Phase 4 Gemini grounding](30-phase-4-gemini-grounding.md) | Provider boundary, structured output and retrieval-first policy |
+| [31 Phase 4 multilingual and safety](31-phase-4-multilingual-safety.md) | Languages, evidence statuses and deterministic gates |
+| [32 Phase 4 attachment foundation](32-phase-4-attachment-foundation.md) | Secure upload contract and explicit Phase 5 boundary |
+| [33 Phase 4 evaluation](33-phase-4-evaluation.md) | Evaluation set, tests and verification gates |
 
 ## Status vocabulary
 

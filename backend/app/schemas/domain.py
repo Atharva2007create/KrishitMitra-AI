@@ -5,7 +5,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.models.enums import AreaUnit, CropCycleStatus, Language, SenderType, UserRole
+from app.models.enums import (
+    AreaUnit,
+    CropCycleStatus,
+    EvidenceStatus,
+    Language,
+    SenderType,
+    SessionOrigin,
+    UserRole,
+)
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 Location = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
@@ -166,6 +174,9 @@ class ChatSessionUpdate(BaseModel):
 class ChatSessionResponse(ChatSessionCreate, ORMModel):
     id: UUID
     user_id: UUID
+    problem_category_id: UUID | None
+    selected_faq_id: UUID | None
+    origin_type: SessionOrigin
     last_message_at: datetime | None
     is_archived: bool
     created_at: datetime
@@ -181,19 +192,23 @@ class MessageResponse(ORMModel):
     chat_session_id: UUID
     sender_type: SenderType
     content: str
+    language: Language | None = None
+    intent: str | None = None
+    evidence_status: EvidenceStatus | None = None
     created_at: datetime
 
 
 class FeedbackCreate(BaseModel):
     message_id: UUID | None = None
     image_analysis_id: UUID | None = None
+    faq_id: UUID | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
     is_helpful: bool | None = None
     comment: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] | None = None
 
     @model_validator(mode="after")
     def require_content(self) -> "FeedbackCreate":
-        if not any((self.message_id, self.image_analysis_id, self.comment)):
+        if not any((self.message_id, self.image_analysis_id, self.faq_id, self.comment)):
             raise ValueError("Feedback requires a target or comment")
         return self
 

@@ -11,6 +11,8 @@ from app.models.entities import (
     AuditLog,
     ChatSession,
     CropCycle,
+    FaqCitation,
+    FaqItem,
     Farm,
     FarmerProfile,
     Feedback,
@@ -19,25 +21,35 @@ from app.models.entities import (
     IngestionJob,
     KnowledgeChunk,
     Message,
+    MessageAttachment,
+    ProblemCategory,
+    ResponseCitation,
     SourceDocument,
     User,
 )
 from app.models.enums import UserRole
 from app.security.dependencies import get_current_user
+from app.services.assistance import rate_limiter
 
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
+    rate_limiter._requests.clear()
     async with SessionFactory() as value:
         for model in [
             Feedback,
             AuditLog,
+            ResponseCitation,
+            FaqCitation,
+            MessageAttachment,
             Message,
             ImageAnalysis,
             KnowledgeChunk,
             IngestionJob,
             SourceDocument,
             ChatSession,
+            FaqItem,
+            ProblemCategory,
             CropCycle,
             Farm,
             FarmerProfile,

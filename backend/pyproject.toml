@@ -35,6 +35,7 @@ dev = [
 
 [project.scripts]
 krishimitra-ingest = "app.ingestion.cli:main"
+krishimitra-faq = "app.faq.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

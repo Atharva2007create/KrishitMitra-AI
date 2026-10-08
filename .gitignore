@@ -14,6 +14,7 @@ __pycache__/
 .venv/
 .venv*/
 .deps/
+.pip-temp/
 
 # Node / Expo
 node_modules/

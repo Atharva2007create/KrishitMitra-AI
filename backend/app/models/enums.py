@@ -31,6 +31,42 @@ class SenderType(StrEnum):
     SYSTEM = "SYSTEM"
 
 
+class SessionOrigin(StrEnum):
+    CATEGORY = "CATEGORY"
+    FAQ = "FAQ"
+    DIRECT = "DIRECT"
+    OTHER = "OTHER"
+
+
+class EvidenceStatus(StrEnum):
+    SUFFICIENT = "SUFFICIENT"
+    PARTIAL = "PARTIAL"
+    INSUFFICIENT = "INSUFFICIENT"
+    REQUIRES_LIVE_DATA = "REQUIRES_LIVE_DATA"
+    REQUIRES_REGULATORY_VALIDATION = "REQUIRES_REGULATORY_VALIDATION"
+    REQUIRES_IMAGE_ANALYSIS = "REQUIRES_IMAGE_ANALYSIS"
+
+
+class AttachmentType(StrEnum):
+    IMAGE = "IMAGE"
+    DOCUMENT = "DOCUMENT"
+
+
+class AttachmentSource(StrEnum):
+    UPLOAD = "UPLOAD"
+    CAMERA = "CAMERA"
+    DOCUMENT_PICKER = "DOCUMENT_PICKER"
+
+
+class AttachmentStatus(StrEnum):
+    PENDING_UPLOAD = "PENDING_UPLOAD"
+    UPLOADED = "UPLOADED"
+    PENDING_ANALYSIS = "PENDING_ANALYSIS"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
 class TrustStatus(StrEnum):
     APPROVED = "APPROVED"
     PENDING = "PENDING"
