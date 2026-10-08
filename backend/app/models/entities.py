@@ -3,10 +3,12 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -19,15 +21,19 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import (
     AreaUnit,
     CropCycleStatus,
+    IngestionStatus,
+    KnowledgeTopic,
     Language,
     RecordStatus,
     SenderType,
+    TriggerType,
     TrustStatus,
     UserRole,
 )
@@ -153,6 +159,8 @@ class GovernmentSource(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     trust_status: Mapped[TrustStatus] = mapped_column(
         Enum(TrustStatus, name="trust_status"), nullable=False
     )
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class SourceDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -163,15 +171,94 @@ class SourceDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(2048))
+    canonical_url: Mapped[str | None] = mapped_column(String(2048), index=True)
     s3_key: Mapped[str | None] = mapped_column(String(1024))
+    mime_type: Mapped[str | None] = mapped_column(String(160))
     publication_date: Mapped[date | None] = mapped_column(Date)
     last_updated_date: Mapped[date | None] = mapped_column(Date)
     version: Mapped[str | None] = mapped_column(String(100))
     document_type: Mapped[str | None] = mapped_column(String(100))
     crop: Mapped[str | None] = mapped_column(String(80))
     region: Mapped[str | None] = mapped_column(String(120))
+    language: Mapped[str | None] = mapped_column(String(16))
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    page_count: Mapped[int | None] = mapped_column(Integer)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    supersedes_document_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("source_documents.id", ondelete="SET NULL")
+    )
     status: Mapped[RecordStatus] = mapped_column(
         Enum(RecordStatus, name="source_document_status"), nullable=False
+    )
+
+
+class IngestionJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_jobs"
+    government_source_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("government_sources.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_document_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("source_documents.id", ondelete="SET NULL")
+    )
+    status: Mapped[IngestionStatus] = mapped_column(
+        Enum(IngestionStatus, name="ingestion_status"), nullable=False
+    )
+    trigger_type: Mapped[TriggerType] = mapped_column(
+        Enum(TriggerType, name="ingestion_trigger_type"), nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chunks_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    chunks_failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_summary: Mapped[str | None] = mapped_column(String(1000))
+    ingestion_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
+
+
+class KnowledgeChunk(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(content)) > 0", name="content_non_empty"),
+        CheckConstraint("embedding_dimension = 768", name="embedding_dimension_768"),
+        CheckConstraint("chunk_index >= 0", name="chunk_index_non_negative"),
+        Index("ix_knowledge_chunks_document", "source_document_id"),
+        Index("ix_knowledge_chunks_filters", "crop", "topic", "language", "is_active"),
+    )
+    source_document_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("source_documents.id", ondelete="RESTRICT"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(160), nullable=False)
+    embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    crop: Mapped[str] = mapped_column(String(80), nullable=False)
+    topic: Mapped[KnowledgeTopic] = mapped_column(
+        Enum(KnowledgeTopic, name="knowledge_topic"), nullable=False
+    )
+    subtopic: Mapped[str | None] = mapped_column(String(160))
+    crop_stage: Mapped[str | None] = mapped_column(String(120))
+    state: Mapped[str | None] = mapped_column(String(100))
+    district: Mapped[str | None] = mapped_column(String(100))
+    region: Mapped[str | None] = mapped_column(String(120))
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    page_start: Mapped[int | None] = mapped_column(Integer)
+    page_end: Mapped[int | None] = mapped_column(Integer)
+    section_title: Mapped[str | None] = mapped_column(String(500))
+    source_reference: Mapped[str | None] = mapped_column(String(2048))
+    publication_date: Mapped[date | None] = mapped_column(Date)
+    ingestion_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    requires_regulatory_validation: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    search_vector: Mapped[Any] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )
 
 

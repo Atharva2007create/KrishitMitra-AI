@@ -14,7 +14,10 @@ from app.models.entities import (
     Farm,
     FarmerProfile,
     Feedback,
+    GovernmentSource,
     ImageAnalysis,
+    IngestionJob,
+    KnowledgeChunk,
     Message,
     SourceDocument,
     User,
@@ -31,12 +34,15 @@ async def session() -> AsyncIterator[AsyncSession]:
             AuditLog,
             Message,
             ImageAnalysis,
+            KnowledgeChunk,
+            IngestionJob,
             SourceDocument,
             ChatSession,
             CropCycle,
             Farm,
             FarmerProfile,
             User,
+            GovernmentSource,
         ]:
             await value.execute(delete(model))
         await value.commit()

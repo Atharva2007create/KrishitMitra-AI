@@ -18,6 +18,30 @@ class Settings(BaseSettings):
     aws_cognito_client_id: str = ""
     aws_cognito_admin_group: str = "administrators"
     jwt_jwks_cache_seconds: int = 3600
+    aws_s3_bucket_documents: str = ""
+    gemini_api_key: str = ""
+    gemini_secret_arn: str = ""
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimension: int = 768
+    rag_default_top_k: int = 5
+    rag_max_top_k: int = 20
+    rag_min_relevance_threshold: float = 0.20
+    rag_vector_weight: float = 0.65
+    rag_lexical_weight: float = 0.35
+
+    @field_validator("embedding_dimension")
+    @classmethod
+    def validate_embedding_dimension(cls, value: int) -> int:
+        if value != 768:
+            raise ValueError("Phase 3 schema is fixed at EMBEDDING_DIMENSION=768")
+        return value
+
+    @field_validator("rag_default_top_k", "rag_max_top_k")
+    @classmethod
+    def validate_positive_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("RAG result limits must be positive")
+        return value
 
     @field_validator("api_version")
     @classmethod

@@ -14,6 +14,12 @@ Parameters:
     Type: String
   ImagesBucketName:
     Type: String
+  GeminiSecretArn:
+    Type: String
+    Default: ""
+
+Conditions:
+  HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, ""]]
 
 Resources:
   BackendSecurityGroup:
@@ -122,10 +128,18 @@ Resources:
                 Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/connectivity/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/government/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/processed/*
                   - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/connectivity/*
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !GetAtt Database.MasterUserSecret.SecretArn
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
       Tags:
         - { Key: Project, Value: KrishiMitra-AI }
         - { Key: Environment, Value: development }

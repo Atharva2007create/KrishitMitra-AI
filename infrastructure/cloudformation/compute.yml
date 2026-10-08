@@ -6,8 +6,12 @@ Parameters:
   AmiId: { Type: AWS::EC2::Image::Id }
   BackendSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   DatabaseSecretArn: { Type: String }
+  GeminiSecretArn: { Type: String, Default: "" }
   DocumentsBucketName: { Type: String }
   ImagesBucketName: { Type: String }
+
+Conditions:
+  HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, ""]]
 
 Resources:
   BackendLogGroup:
@@ -46,10 +50,18 @@ Resources:
                 Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
                 Resource:
                   - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/connectivity/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/government/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DocumentsBucketName}/processed/*
                   - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/connectivity/*
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseSecretArn
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
       Tags:
         - { Key: Project, Value: KrishiMitra-AI }
         - { Key: Environment, Value: development }

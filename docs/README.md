@@ -24,6 +24,12 @@
 | [18 Phase 2 authentication](18-phase-2-authentication.md) | Cognito JWT validation, role mapping and admin bootstrap |
 | [19 Phase 2 core API](19-phase-2-core-api.md) | Implemented endpoints, ownership rules and rate-limit strategy |
 | [20 Phase 2 testing](20-phase-2-testing.md) | Quality gates, security tests and deployment verification |
+| [21 Phase 3 government data](21-phase-3-government-data.md) | Verified ICAR/ICAR-IIPR inventory, storage and version policy |
+| [22 Phase 3 ingestion pipeline](22-phase-3-ingestion-pipeline.md) | Acquisition, extraction, chunking, embedding and CLI |
+| [23 Phase 3 RAG retrieval](23-phase-3-rag-retrieval.md) | Hybrid search, filters, APIs and Phase 4 boundary |
+| [24 Phase 3 source provenance](24-phase-3-source-provenance.md) | Citation chain and safety controls |
+| [25 Phase 3 RAG evaluation](25-phase-3-rag-evaluation.md) | 60-question dataset and quality gates |
+| [26 Phase 3 verification](26-phase-3-verification.md) | Executed checks, deployment evidence and remaining blockers |
 
 ## Status vocabulary
 

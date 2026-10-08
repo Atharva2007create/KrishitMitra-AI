@@ -1,6 +1,6 @@
 # KrishiMitra AI
 
-KrishiMitra AI is a government-evidence-backed farmer assistant. V1 is limited to Tur (pigeonpea). Phase 2 provides the relational data model, Cognito JWT authentication, role-based authorization, farmer-owned core APIs, migrations, and tests. AI, RAG, ingestion, image diagnosis, weather, markets, and final UI remain out of scope.
+KrishiMitra AI is a government-evidence-backed farmer assistant. V1 is limited to Tur (pigeonpea). Phase 3 adds the official ICAR/ICAR-IIPR ingestion, provenance, pgvector/full-text hybrid retrieval and evidence APIs. Final conversational generation, image diagnosis, live weather, live markets, and final UI remain out of scope.
 
 ## Architecture
 
@@ -14,7 +14,8 @@ apps/mobile/              Expo + React Native + TypeScript status shell
 backend/                  FastAPI core API, Alembic migrations, security and tests
 infrastructure/           CloudFormation and Lambda foundation source
 scripts/                  Local database initialization
-docs/                     Phase 0 contract plus Phase 1 and Phase 2 guides
+data/                     Verified source inventory and retrieval evaluation dataset
+docs/                     Phase 0 contract plus Phase 1–3 guides
 .github/workflows/        Non-deploying CI
 docker-compose.yml        FastAPI + PostgreSQL/pgvector development stack
 ```
@@ -102,4 +103,4 @@ Phase 2 API: <https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com/docs>
 
 ## Status
 
-Phase 0 and Phase 1 are complete. Phase 2 implements the database, authentication, RBAC, and core backend described in the [Phase 2 documentation](docs/README.md). Phase 3 AI/RAG work has not started.
+Phase 0–2 are complete. Phase 3 retrieval implementation and its live-verification status are documented in the [documentation index](docs/README.md). Phase 3 does not implement final Gemini-generated farmer answers.

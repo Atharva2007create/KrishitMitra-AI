@@ -29,13 +29,28 @@ async def post_migration_tasks(seed: bool, verify: bool) -> None:
                     "WHERE table_schema = 'public' AND table_name IN "
                     "('users','farmer_profiles','farms','crop_cycles','chat_sessions',"
                     "'messages','government_sources','source_documents','image_analyses',"
-                    "'feedback','audit_logs')"
+                    "'feedback','audit_logs','ingestion_jobs','knowledge_chunks')"
                 )
             )
             sources = await connection.scalar(text("SELECT count(*) FROM government_sources"))
+            vector_dimension = await connection.scalar(
+                text(
+                    "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a "
+                    "JOIN pg_class c ON c.oid=a.attrelid "
+                    "WHERE c.relname='knowledge_chunks' AND a.attname='embedding'"
+                )
+            )
+            indexes = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM pg_indexes WHERE tablename='knowledge_chunks' "
+                    "AND indexname IN ('ix_knowledge_chunks_embedding_hnsw',"
+                    "'ix_knowledge_chunks_search_vector')"
+                )
+            )
         print(
             f"Verified revision={revision}, core_tables={int(tables or 0)}, "
-            f"government_sources={int(sources or 0)}."
+            f"government_sources={int(sources or 0)}, vector={vector_dimension}, "
+            f"rag_indexes={int(indexes or 0)}."
         )
     await engine.dispose()
 
