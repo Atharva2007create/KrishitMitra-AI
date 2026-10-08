@@ -97,6 +97,8 @@ class AssistanceResponse(BaseModel):
     requires_live_data: bool = False
     requires_regulatory_validation: bool = False
     safety_flags: list[str] = Field(default_factory=list)
+    live_data: list[dict[str, object]] = Field(default_factory=list)
+    data_timestamp: datetime | None = None
     created_at: datetime
 
 
@@ -115,6 +117,7 @@ class AttachmentUploadRequest(BaseModel):
 
 class AttachmentUploadResponse(BaseModel):
     attachment_id: UUID
+    analysis_id: UUID | None = None
     upload_url: str
     method: str = "POST"
     form_fields: dict[str, str]
@@ -135,4 +138,21 @@ class AttachmentResponse(BaseModel):
     mime_type: str
     file_size: int | None
     status: AttachmentStatus
+    created_at: datetime
+
+
+class ImageAnalysisResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    attachment_id: UUID | None
+    status: str
+    content_hash: str | None
+    model_name: str | None
+    observed_symptoms: dict[str, object] | None
+    candidate_issues: list[dict[str, object]] | None
+    quality_assessment: dict[str, object] | None
+    evidence_json: dict[str, object] | None
+    error_code: str | None
+    processed_at: datetime | None
     created_at: datetime

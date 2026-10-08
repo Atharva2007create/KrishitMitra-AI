@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     assistance_max_question_length: int = 2000
     attachment_max_size_mb: int = 10
     presigned_upload_ttl_seconds: int = 900
+    government_http_timeout_seconds: float = 12.0
+    government_http_max_retries: int = 2
+    government_http_max_response_bytes: int = 5_000_000
+    imd_api_base_url: str = "https://api.imd.gov.in/api/v1"
+    imd_api_auth_header: str = "Authorization"
+    imd_api_auth_value: str = ""
+    data_gov_api_base_url: str = "https://api.data.gov.in/resource"
+    data_gov_api_key: str = ""
+    agmarknet_resource_id: str = "9ef84268-d588-465a-a308-a864a43d0070"
+    live_data_cache_seconds: int = 900
+    weather_max_age_seconds: int = 21_600
+    image_analysis_model: str = "gemini-3.8-flash"
+    image_analysis_lambda_name: str = "krishimitra-dev-image-analysis"
+    image_retention_days: int = 30
     assistance_rate_limit_per_minute: int = 10
     rag_default_top_k: int = 5
     rag_max_top_k: int = 20
@@ -54,6 +68,19 @@ class Settings(BaseSettings):
     def validate_positive_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("RAG result limits must be positive")
+        return value
+
+    @field_validator(
+        "government_http_max_retries",
+        "government_http_max_response_bytes",
+        "live_data_cache_seconds",
+        "weather_max_age_seconds",
+        "image_retention_days",
+    )
+    @classmethod
+    def validate_positive_phase5_value(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("Phase 5 limits must be positive")
         return value
 
     @field_validator("api_version")

@@ -9,7 +9,9 @@ from app.api.v1 import (
     crop_cycles,
     farms,
     feedback,
+    images,
     knowledge,
+    live_data,
     me,
     profiles,
     sources,
@@ -29,6 +31,8 @@ router.include_router(sources.router)
 router.include_router(categories.router)
 router.include_router(assistance.router)
 router.include_router(attachments.router)
+router.include_router(live_data.router)
+router.include_router(images.router)
 
 
 @router.get("/ready", tags=["system"])

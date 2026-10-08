@@ -255,8 +255,8 @@ async def test_category_and_grounded_faq_localization(
 @pytest.mark.parametrize(
     ("question", "expected"),
     [
-        ("What's today's Tur price?", "REQUIRES_LIVE_DATA"),
-        ("Will it rain tomorrow?", "REQUIRES_LIVE_DATA"),
+        ("What's today's Tur price?", "LIVE_DATA_UNAVAILABLE"),
+        ("Will it rain tomorrow?", "LIVE_DATA_UNAVAILABLE"),
         ("Give pesticide dosage", "REQUIRES_REGULATORY_VALIDATION"),
         ("I want to upload a photo", "REQUIRES_IMAGE_ANALYSIS"),
         ("How should I grow wheat?", "INSUFFICIENT"),
@@ -390,7 +390,7 @@ async def test_attachment_presign_and_cross_user_ownership(
 
     class S3:
         def generate_presigned_post(self, **kwargs: Any) -> dict[str, Any]:
-            assert kwargs["Key"].startswith(f"attachments/{users[0].id}/")
+            assert kwargs["Key"].startswith(f"farmer-uploads/{users[0].id}/")
             return {"url": "https://upload.example.test", "fields": {"key": kwargs["Key"]}}
 
     monkeypatch.setattr(attachment_routes.boto3, "client", lambda *args, **kwargs: S3())

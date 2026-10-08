@@ -275,7 +275,11 @@ class MessageAttachment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
     s3_key: Mapped[str | None] = mapped_column(String(1024))
+    bucket_name: Mapped[str | None] = mapped_column(String(255))
     file_size: Mapped[int | None] = mapped_column(Integer)
+    content_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    s3_etag: Mapped[str | None] = mapped_column(String(128))
+    upload_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[AttachmentStatus] = mapped_column(
         Enum(AttachmentStatus, name="attachment_status"), nullable=False
     )
@@ -396,20 +400,33 @@ class KnowledgeChunk(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ImageAnalysis(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "image_analyses"
-    __table_args__ = (Index("ix_image_analyses_user_id", "user_id"),)
+    __table_args__ = (
+        Index("ix_image_analyses_user_id", "user_id"),
+        Index("ix_image_analyses_idempotency", "content_hash", "model_name"),
+    )
     user_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     crop_cycle_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("crop_cycles.id", ondelete="SET NULL")
     )
+    attachment_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("message_attachments.id", ondelete="CASCADE"), unique=True
+    )
     s3_key: Mapped[str | None] = mapped_column(String(1024))
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    model_name: Mapped[str | None] = mapped_column(String(160))
     status: Mapped[RecordStatus] = mapped_column(
         Enum(RecordStatus, name="image_analysis_status"), nullable=False
     )
     observed_symptoms: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     possible_issue: Mapped[str | None] = mapped_column(Text)
     final_guidance: Mapped[str | None] = mapped_column(Text)
+    quality_assessment: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    candidate_issues: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
+    evidence_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    error_code: Mapped[str | None] = mapped_column(String(120))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Feedback(UUIDPrimaryKeyMixin, Base):

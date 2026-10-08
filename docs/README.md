@@ -37,6 +37,11 @@
 | [31 Phase 4 multilingual and safety](31-phase-4-multilingual-safety.md) | Languages, evidence statuses and deterministic gates |
 | [32 Phase 4 attachment foundation](32-phase-4-attachment-foundation.md) | Secure upload contract and explicit Phase 5 boundary |
 | [33 Phase 4 evaluation](33-phase-4-evaluation.md) | Evaluation set, tests and verification gates |
+| [34 Phase 5 source access matrix](34-phase-5-source-access-matrix.md) | Verified official access modes, credentials and honest source status |
+| [35 Phase 5 live data service](35-phase-5-live-data-service.md) | Normalized adapters, endpoints, freshness and failure isolation |
+| [36 Phase 5 image analysis](36-phase-5-image-analysis.md) | Private upload, Lambda observation, idempotency and RAG handoff |
+| [37 Phase 5 deployment and operations](37-phase-5-deployment-and-operations.md) | Migration, CloudFormation, S3 event wiring and monitoring |
+| [38 Phase 5 testing](38-phase-5-testing.md) | Automated and cloud acceptance gates |
 
 ## Status vocabulary
 

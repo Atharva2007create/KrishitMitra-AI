@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KrishiMitra AI Phase 5 private crop-image analysis Lambda
+
+Parameters:
+  ImagesBucketName: { Type: String }
+  GeminiSecretArn: { Type: String }
+  CodeBucketName: { Type: String }
+  CodeObjectKey: { Type: String }
+  ImageModel: { Type: String, Default: gemini-3.8-flash }
+  ImageFallbackModel: { Type: String, Default: gemini-3.7-flash }
+  BackendRoleName: { Type: String, Default: krishimitra-dev-backend-role }
+
+Resources:
+  BackendPhase5Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: krishimitra-phase5-image-access
+      Roles: [!Ref BackendRoleName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: [s3:GetObject, s3:PutObject]
+            Resource: !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/farmer-uploads/*
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-results/*
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:krishimitra-dev-image-analysis
+
+  ImageAnalysisRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: krishimitra-dev-image-analysis-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: phase5-image-analysis-least-privilege
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/krishimitra-dev-image-analysis:*
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/farmer-uploads/*
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-results/*
+                  - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-hashes/*
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref GeminiSecretArn
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  ImageAnalysisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/krishimitra-dev-image-analysis
+      RetentionInDays: 14
+
+  ImageAnalysisFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ImageAnalysisLogGroup
+    Properties:
+      FunctionName: krishimitra-dev-image-analysis
+      Description: Phase 5 bounded visual observations for private farmer crop images
+      Runtime: python3.13
+      Handler: handler.lambda_handler
+      Role: !GetAtt ImageAnalysisRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Code:
+        S3Bucket: !Ref CodeBucketName
+        S3Key: !Ref CodeObjectKey
+      Environment:
+        Variables:
+          IMAGES_BUCKET: !Ref ImagesBucketName
+          GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          GEMINI_IMAGE_MODEL: !Ref ImageModel
+          GEMINI_IMAGE_FALLBACK_MODEL: !Ref ImageFallbackModel
+          MAX_IMAGE_BYTES: "10485760"
+      Tags:
+        - { Key: Project, Value: KrishiMitra-AI }
+        - { Key: Environment, Value: development }
+
+  AllowImagesBucketInvocation:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageAnalysisFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}
+
+  ImageAnalysisErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: krishimitra-dev-image-analysis-errors
+      AlarmDescription: Phase 5 image Lambda errors in a five-minute period
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ImageAnalysisFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  FunctionName: { Value: !Ref ImageAnalysisFunction }
+  FunctionArn: { Value: !GetAtt ImageAnalysisFunction.Arn }
+  ResultPrefix: { Value: analysis-results/ }
