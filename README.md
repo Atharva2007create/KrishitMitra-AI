@@ -69,7 +69,7 @@ $env:NEXT_PUBLIC_API_BASE_URL="http://localhost:8000"
 npm run dev
 ```
 
-Open `http://localhost:3000`. Quality checks: `npm run lint`, `npm run typecheck`, and `npm run build`.
+Open `http://localhost:3000`. Quality checks: `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
 
 ## Mobile
 
@@ -82,15 +82,17 @@ npm start
 
 `localhost` on a physical phone means the phone itself. Use the development computer's reachable LAN IP, allow only the necessary local firewall access, and keep both devices on an appropriate trusted network. Android emulators may use `10.0.2.2`; simulator behavior varies.
 
-Validate without an emulator using `npm run lint`, `npm run typecheck`, and `npx expo config --type public`.
+Validate without an emulator using `npm run lint`, `npm run typecheck`, `npm test`, and `npx expo config --type public`.
 
 ## AWS development
 
 AWS creation and verification are recorded in [Phase 1 AWS resources](docs/14-phase-1-aws-resources.md) and the [Phase 2 testing record](docs/20-phase-2-testing.md). Never use the AWS root account. Chargeable EC2/RDS/Amplify/Cognito messaging resources require explicit inventory and cleanup awareness.
 
-Phase 1 development shell: <https://main.d32qjrxuwdvdbd.amplifyapp.com>
+Deployed farmer web application: <https://main.d32qjrxuwdvdbd.amplifyapp.com>
 
-Phase 2 API: <https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com/docs>
+Deployed admin console: <https://main.d32qjrxuwdvdbd.amplifyapp.com/admin>
+
+Deployed API: <https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com/docs>
 
 ## Troubleshooting
 
@@ -103,4 +105,4 @@ Phase 2 API: <https://vruyoz5jo4.execute-api.ap-south-1.amazonaws.com/docs>
 
 ## Status
 
-Phase 0–3 are complete. Phase 4 guided assistance and its verification status are documented in the [documentation index](docs/README.md). Phase 5 live-data and image-analysis integrations are not implemented.
+Phases 0–8 are implemented as a production-style college prototype. The final deployment, validation evidence, portability instructions, and residual limitations are recorded in the [Phase 8 finalization report](docs/39-phase-8-finalization.md).

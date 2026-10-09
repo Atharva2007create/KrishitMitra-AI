@@ -20,9 +20,7 @@ router = APIRouter(prefix="/image-analyses", tags=["crop image analysis"])
 Session = Annotated[AsyncSession, Depends(get_db)]
 
 
-async def _sync_result(
-    analysis: ImageAnalysis, session: AsyncSession
-) -> ImageAnalysis:
+async def _sync_result(analysis: ImageAnalysis, session: AsyncSession) -> ImageAnalysis:
     if analysis.status in (
         RecordStatus.COMPLETED,
         RecordStatus.FAILED,

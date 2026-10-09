@@ -144,9 +144,7 @@ SAFE_MESSAGES: dict[EvidenceStatus, dict[Language, str]] = {
         Language.MR: "अचूक कीटकनाशक सूचना देण्यापूर्वी सध्याची नियामक पडताळणी आवश्यक आहे.",
     },
     EvidenceStatus.REQUIRES_IMAGE_ANALYSIS: {
-        Language.EN: (
-            "Image analysis is still processing or needs a clearer Tur crop image."
-        ),
+        Language.EN: ("Image analysis is still processing or needs a clearer Tur crop image."),
         Language.HI: "चित्र विश्लेषण जारी है या अरहर की अधिक स्पष्ट तस्वीर चाहिए।",
         Language.MR: "प्रतिमा विश्लेषण सुरू आहे किंवा तूर पिकाचा अधिक स्पष्ट फोटो आवश्यक आहे.",
     },

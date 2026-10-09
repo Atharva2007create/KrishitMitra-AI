@@ -145,9 +145,7 @@ async def test_market_results_are_sorted_by_actual_arrival_date() -> None:
             ]
         }
     )
-    service = LiveAgricultureDataService(
-        Settings(app_env="test", data_gov_api_key="credential")
-    )
+    service = LiveAgricultureDataService(Settings(app_env="test", data_gov_api_key="credential"))
     service.market_adapter = AgmarknetMarketAdapter(  # type: ignore[arg-type]
         client, "https://api.data.gov.in/resource", "resource-id", "credential"
     )
@@ -233,9 +231,7 @@ def test_lambda_rejects_treatment_content_from_visual_model(
         ],
         "follow_up_questions": [],
     }
-    envelope = {
-        "candidates": [{"content": {"parts": [{"text": json.dumps(model_result)}]}}]
-    }
+    envelope = {"candidates": [{"content": {"parts": [{"text": json.dumps(model_result)}]}}]}
 
     class Response:
         def __enter__(self) -> "Response":
@@ -263,9 +259,7 @@ def test_lambda_retries_transient_model_failure(monkeypatch: pytest.MonkeyPatch)
         "candidate_issues": [],
         "follow_up_questions": ["Upload a clearer crop image."],
     }
-    envelope = {
-        "candidates": [{"content": {"parts": [{"text": json.dumps(model_result)}]}}]
-    }
+    envelope = {"candidates": [{"content": {"parts": [{"text": json.dumps(model_result)}]}}]}
 
     class Response:
         def __enter__(self) -> "Response":

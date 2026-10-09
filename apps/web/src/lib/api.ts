@@ -26,9 +26,13 @@ async function cognito(target: string, body: Record<string, unknown>) {
 
 export async function adminSignIn(username: string, password: string) {
   const value = await cognito("InitiateAuth", {
-    AuthFlow: "USER_PASSWORD_AUTH",
+    AuthFlow: "USER_AUTH",
     ClientId: CLIENT_ID,
-    AuthParameters: { USERNAME: username, PASSWORD: password },
+    AuthParameters: {
+      USERNAME: username,
+      PASSWORD: password,
+      PREFERRED_CHALLENGE: "PASSWORD",
+    },
   }) as { AuthenticationResult?: { AccessToken?: string; IdToken?: string } };
   const token = value.AuthenticationResult?.AccessToken ?? value.AuthenticationResult?.IdToken;
   if (!token) throw new Error("Cognito did not return an authentication token.");

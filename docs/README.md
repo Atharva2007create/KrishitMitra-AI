@@ -42,6 +42,7 @@
 | [36 Phase 5 image analysis](36-phase-5-image-analysis.md) | Private upload, Lambda observation, idempotency and RAG handoff |
 | [37 Phase 5 deployment and operations](37-phase-5-deployment-and-operations.md) | Migration, CloudFormation, S3 event wiring and monitoring |
 | [38 Phase 5 testing](38-phase-5-testing.md) | Automated and cloud acceptance gates |
+| [39 Phase 8 finalization](39-phase-8-finalization.md) | Final validation, AWS deployment, operations and residual limitations |
 
 ## Status vocabulary
 

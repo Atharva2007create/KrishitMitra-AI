@@ -20,6 +20,11 @@ test("admin privilege is verified by the backend before console access", () => {
   assert.match(component, /if \(health\.role !== "ADMIN"\).*setVerified\(true\)/s);
 });
 
+test("admin sign-in uses the Cognito password challenge configured by infrastructure", () => {
+  assert.match(api, /AuthFlow: "USER_AUTH"/);
+  assert.match(api, /PREFERRED_CHALLENGE: "PASSWORD"/);
+});
+
 test("admin logout clears separate authentication state", () => {
   assert.match(component, /removeItem\("krishimitra\.admin\.token"\)/);
   assert.match(component, /setVerified\(false\)/);

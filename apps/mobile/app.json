@@ -6,6 +6,16 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow KrishiMitra to select a crop photo for analysis.",
+          "cameraPermission": "Allow KrishiMitra to photograph a crop for analysis.",
+          "microphonePermission": false
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ai.krishimitra.mobile"

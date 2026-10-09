@@ -20,9 +20,7 @@ class PesticideRegulatoryAdapter:
             if product_name.casefold() in record.product_name.casefold()
             and crop.casefold() in record.crop.casefold()
             and (
-                target is None
-                or not record.target
-                or target.casefold() in record.target.casefold()
+                target is None or not record.target or target.casefold() in record.target.casefold()
             )
             and (record.valid_from is None or record.valid_from <= now)
             and (record.valid_until is None or record.valid_until >= now)

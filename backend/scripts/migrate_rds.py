@@ -7,9 +7,9 @@ import os
 from urllib.parse import quote_plus
 
 import boto3  # type: ignore[import-untyped]
-from alembic.config import Config
 
 from alembic import command
+from alembic.config import Config
 
 
 async def post_migration_tasks(seed: bool, verify: bool) -> None:

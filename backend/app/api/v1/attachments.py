@@ -95,10 +95,7 @@ async def initiate_attachment_upload(
             detail="Attachment storage is not configured",
         )
     attachment_id = uuid4()
-    key = (
-        f"farmer-uploads/{current_user.id}/{chat.id}/{attachment_id}/"
-        f"{payload.file_name}"
-    )
+    key = f"farmer-uploads/{current_user.id}/{chat.id}/{attachment_id}/{payload.file_name}"
     metadata = {
         "attachment-id": str(attachment_id),
         "user-id": str(current_user.id),

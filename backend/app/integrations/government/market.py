@@ -51,9 +51,7 @@ class AgmarknetMarketAdapter:
             params["filters[district]"] = district
         if market:
             params["filters[market]"] = market
-        payload = await self.client.get_json(
-            f"{self.base_url}/{self.resource_id}", params=params
-        )
+        payload = await self.client.get_json(f"{self.base_url}/{self.resource_id}", params=params)
         rows = payload.get("records", []) if isinstance(payload, dict) else []
         if not isinstance(rows, list):
             raise GovernmentSourceError("SOURCE_SCHEMA_INVALID", "OGD response schema changed")
