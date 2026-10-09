@@ -1,43 +1,113 @@
 "use client";
-
-import { useEffect, useState } from "react";
-
-type BackendState = "checking" | "connected" | "offline";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { useEffect, useMemo, useState } from "react";
+import { FarmerApp } from "@/components/FarmerApp";
+import { api } from "@/lib/api";
+import type {
+  Category,
+  ChatSession,
+  CropCycle,
+  Farm,
+  Language,
+  Me,
+  Screen,
+} from "@/lib/types";
 
 export default function Home() {
-  const [backendState, setBackendState] = useState<BackendState>("checking");
-
+  const [token, setToken] = useState("");
+  const [language, setLanguage] = useState<Language>("en");
+  const [screen, setScreen] = useState<Screen>("login");
+  const [me, setMe] = useState<Me | null>(null);
+  const [farms, setFarms] = useState<Farm[]>([]);
+  const [cycles, setCycles] = useState<CropCycle[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [chats, setChats] = useState<ChatSession[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
-    const controller = new AbortController();
-
-    async function checkBackend() {
-      try {
-        const response = await fetch(`${apiBaseUrl}/health`, { signal: controller.signal });
-        setBackendState(response.ok ? "connected" : "offline");
-      } catch {
-        if (!controller.signal.aborted) setBackendState("offline");
+    queueMicrotask(() => {
+      const saved = localStorage.getItem("krishimitra.token") ?? "";
+      const savedLanguage = localStorage.getItem(
+        "krishimitra.language",
+      ) as Language | null;
+      if (savedLanguage && ["en", "hi", "mr"].includes(savedLanguage))
+        setLanguage(savedLanguage);
+      if (saved) {
+        setToken(saved);
+        setScreen("home");
       }
-    }
-
-    void checkBackend();
-    return () => controller.abort();
+    });
   }, []);
-
+  useEffect(() => {
+    localStorage.setItem("krishimitra.language", language);
+  }, [language]);
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    Promise.all([
+      api.me(token),
+      api.farms(token),
+      api.cycles(token),
+      api.categories(token, language),
+      api.chats(token),
+    ])
+      .then(([identity, farmRows, cycleRows, categoryRows, chatRows]) => {
+        if (!active) return;
+        setMe(identity);
+        setFarms(farmRows);
+        setCycles(cycleRows);
+        setCategories(categoryRows);
+        setChats(chatRows);
+      })
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Unable to load your farmer account.",
+        );
+        if ((reason as { status?: number }).status === 401) logout();
+      })
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [token, language]);
+  function authenticated(value: string) {
+    localStorage.setItem("krishimitra.token", value);
+    setLoading(true);
+    setError("");
+    setToken(value);
+    setScreen("home");
+  }
+  function logout() {
+    localStorage.removeItem("krishimitra.token");
+    setToken("");
+    setMe(null);
+    setScreen("login");
+  }
+  const activeCycle = useMemo(
+    () => cycles.find((item) => item.status === "ACTIVE") ?? cycles[0],
+    [cycles],
+  );
   return (
-    <main>
-      <section className="shell" aria-labelledby="page-title">
-        <div className="mark" aria-hidden="true">KM</div>
-        <p className="eyebrow">Phase 1 foundation</p>
-        <h1 id="page-title">KrishiMitra AI</h1>
-        <p className="lede">Responsive web development environment</p>
-        <div className="status" role="status" aria-live="polite">
-          <span className={`dot dot--${backendState}`} aria-hidden="true" />
-          Backend status: <strong>{backendState}</strong>
-        </div>
-        <p className="note">Business features intentionally begin in later phases.</p>
-      </section>
-    </main>
+    <FarmerApp
+      {...{
+        token,
+        language,
+        setLanguage,
+        screen,
+        setScreen,
+        me,
+        farms,
+        cycles,
+        activeCycle,
+        categories,
+        chats,
+        loading,
+        error,
+        authenticated,
+        logout,
+      }}
+    />
   );
 }

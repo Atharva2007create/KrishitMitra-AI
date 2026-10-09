@@ -9,18 +9,20 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "eslint .",
+    "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check ."
   },
   "dependencies": {
     "expo": "latest",
+    "expo-image-picker": "latest",
     "expo-status-bar": "latest",
     "react": "latest",
     "react-native": "latest"
   },
   "devDependencies": {
-    "@types/react": "latest",
     "@types/node": "latest",
+    "@types/react": "latest",
     "eslint": "latest",
     "eslint-config-expo": "latest",
     "prettier": "latest",

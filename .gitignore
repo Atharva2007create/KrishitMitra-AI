@@ -23,6 +23,7 @@ node_modules/
 dist/
 coverage/
 web-build/
+out/
 *.tsbuildinfo
 
 # Editors / OS
@@ -32,6 +33,9 @@ web-build/
 Thumbs.db
 
 # Local artifacts
+.build/
+backend/.phase5-env/
+backend/.phase5-tools/
 *.log
 *.tar.gz
 tmp/
