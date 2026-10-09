@@ -20,3 +20,10 @@ test("unsupported live panels are represented honestly", () => {
   assert.match(app, /Not available from the current backend contract/);
   assert.doesNotMatch(app, /mock weather|mock market|sample price/i);
 });
+
+test("farmer SMS OTP uses Cognito's required challenge response contract", () => {
+  assert.match(api, /PREFERRED_CHALLENGE: "SMS_OTP"/);
+  assert.match(api, /ChallengeName: "SMS_OTP"/);
+  assert.match(api, /SMS_OTP_CODE: otp/);
+  assert.doesNotMatch(api, /SMS_OTP: otp/);
+});

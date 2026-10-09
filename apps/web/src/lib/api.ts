@@ -53,11 +53,19 @@ export const adminApi = {
   system: (token: string) => request<Record<string, unknown>>("/admin/system", token),
 };
 
+function normalizePhone(phone: string) {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
+  return trimmed.startsWith("+") ? `+${digits}` : trimmed;
+}
+
 export async function sendOtp(phone: string) {
-  return cognito("InitiateAuth", { AuthFlow: "USER_AUTH", ClientId: CLIENT_ID, AuthParameters: { USERNAME: phone, PREFERRED_CHALLENGE: "SMS_OTP" } }) as Promise<{ ChallengeName?: string; Session?: string }>;
+  return cognito("InitiateAuth", { AuthFlow: "USER_AUTH", ClientId: CLIENT_ID, AuthParameters: { USERNAME: normalizePhone(phone), PREFERRED_CHALLENGE: "SMS_OTP" } }) as Promise<{ ChallengeName?: string; Session?: string }>;
 }
 export async function verifyOtp(phone: string, otp: string, session: string) {
-  const value = await cognito("RespondToAuthChallenge", { ClientId: CLIENT_ID, ChallengeName: "SMS_OTP", Session: session, ChallengeResponses: { USERNAME: phone, SMS_OTP: otp } }) as { AuthenticationResult?: { AccessToken?: string; IdToken?: string; RefreshToken?: string } };
+  const value = await cognito("RespondToAuthChallenge", { ClientId: CLIENT_ID, ChallengeName: "SMS_OTP", Session: session, ChallengeResponses: { USERNAME: normalizePhone(phone), SMS_OTP_CODE: otp } }) as { AuthenticationResult?: { AccessToken?: string; IdToken?: string; RefreshToken?: string } };
   const token = value.AuthenticationResult?.AccessToken ?? value.AuthenticationResult?.IdToken;
   if (!token) throw new Error("Cognito did not return an authentication token.");
   return token;
