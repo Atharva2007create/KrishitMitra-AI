@@ -24,6 +24,31 @@ async function cognito(target: string, body: Record<string, unknown>) {
   return value;
 }
 
+export async function adminSignIn(username: string, password: string) {
+  const value = await cognito("InitiateAuth", {
+    AuthFlow: "USER_PASSWORD_AUTH",
+    ClientId: CLIENT_ID,
+    AuthParameters: { USERNAME: username, PASSWORD: password },
+  }) as { AuthenticationResult?: { AccessToken?: string; IdToken?: string } };
+  const token = value.AuthenticationResult?.AccessToken ?? value.AuthenticationResult?.IdToken;
+  if (!token) throw new Error("Cognito did not return an authentication token.");
+  return token;
+}
+
+export const adminApi = {
+  health: (token: string) => request<{ status: string; role: string }>("/admin/health", token),
+  dashboard: (token: string) => request<Record<string, unknown>>("/admin/dashboard", token),
+  users: (token: string) => request<Array<Record<string, unknown>>>("/admin/users", token),
+  user: (token: string, id: string) => request<Record<string, unknown>>(`/admin/users/${id}`, token),
+  sources: (token: string) => request<Array<Record<string, unknown>>>("/admin/sources", token),
+  documents: (token: string) => request<Array<Record<string, unknown>>>("/admin/documents", token),
+  ingestion: (token: string) => request<Array<Record<string, unknown>>>("/admin/ingestion", token),
+  feedback: (token: string) => request<Array<Record<string, unknown>>>("/admin/feedback", token),
+  images: (token: string) => request<Array<Record<string, unknown>>>("/admin/image-analyses", token),
+  audit: (token: string) => request<Array<Record<string, unknown>>>("/admin/audit-logs", token),
+  system: (token: string) => request<Record<string, unknown>>("/admin/system", token),
+};
+
 export async function sendOtp(phone: string) {
   return cognito("InitiateAuth", { AuthFlow: "USER_AUTH", ClientId: CLIENT_ID, AuthParameters: { USERNAME: phone, PREFERRED_CHALLENGE: "SMS_OTP" } }) as Promise<{ ChallengeName?: string; Session?: string }>;
 }
