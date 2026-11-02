@@ -20,6 +20,16 @@ ADMIN_ROUTES = [
 
 
 @pytest.mark.parametrize("route", ADMIN_ROUTES)
+async def test_unauthenticated_user_cannot_access_admin_routes(
+    route: str,
+    client: AsyncClient,
+) -> None:
+    response = await client.get(route)
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("route", ADMIN_ROUTES)
 async def test_farmer_cannot_access_admin_routes(
     route: str,
     client: AsyncClient,

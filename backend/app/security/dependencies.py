@@ -35,15 +35,15 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
     user = await session.scalar(select(User).where(User.cognito_sub == claims.subject))
+    claimed_role = (
+        UserRole.ADMIN
+        if get_settings().aws_cognito_admin_group in claims.groups
+        else UserRole.FARMER
+    )
     if user is None:
-        role = (
-            UserRole.ADMIN
-            if get_settings().aws_cognito_admin_group in claims.groups
-            else UserRole.FARMER
-        )
         user = User(
             cognito_sub=claims.subject,
-            role=role,
+            role=claimed_role,
             phone_number=claims.phone_number,
             email=claims.email,
             last_login_at=claims.authenticated_at,
@@ -52,6 +52,7 @@ async def get_current_user(
     else:
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+        user.role = claimed_role
         user.phone_number = user.phone_number or claims.phone_number
         user.email = user.email or claims.email
         if user.last_login_at is None or user.last_login_at < claims.authenticated_at:
