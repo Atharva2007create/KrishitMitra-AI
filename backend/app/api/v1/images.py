@@ -1,6 +1,6 @@
 import json
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -20,6 +20,26 @@ router = APIRouter(prefix="/image-analyses", tags=["crop image analysis"])
 Session = Annotated[AsyncSession, Depends(get_db)]
 
 
+async def _timeout_if_stale(
+    analysis: ImageAnalysis,
+    attachment: MessageAttachment | None,
+    session: AsyncSession,
+) -> ImageAnalysis:
+    settings = get_settings()
+    reference_time = getattr(analysis, "updated_at", None) or analysis.created_at
+    age = (datetime.now(UTC) - reference_time).total_seconds()
+    if age < settings.image_analysis_timeout_seconds:
+        return analysis
+    analysis.status = RecordStatus.FAILED
+    analysis.error_code = "ANALYSIS_TIMEOUT"
+    analysis.processed_at = datetime.now(UTC)
+    if attachment is not None:
+        attachment.status = AttachmentStatus.FAILED
+    await session.commit()
+    await session.refresh(analysis)
+    return analysis
+
+
 async def _sync_result(analysis: ImageAnalysis, session: AsyncSession) -> ImageAnalysis:
     if analysis.status in (
         RecordStatus.COMPLETED,
@@ -28,10 +48,10 @@ async def _sync_result(analysis: ImageAnalysis, session: AsyncSession) -> ImageA
     ):
         return analysis
     if analysis.attachment_id is None:
-        return analysis
+        return await _timeout_if_stale(analysis, None, session)
     attachment = await session.get(MessageAttachment, analysis.attachment_id)
     if attachment is None or not attachment.bucket_name:
-        return analysis
+        return await _timeout_if_stale(analysis, attachment, session)
     client: Any = boto3.client("s3", region_name=get_settings().aws_region)
     try:
         response = client.get_object(
@@ -40,17 +60,17 @@ async def _sync_result(analysis: ImageAnalysis, session: AsyncSession) -> ImageA
         )
         raw = response["Body"].read(1_000_001)
         if len(raw) > 1_000_000:
-            return analysis
+            return await _timeout_if_stale(analysis, attachment, session)
         value = json.loads(raw)
     except Exception:
-        return analysis
+        return await _timeout_if_stale(analysis, attachment, session)
     if not isinstance(value, dict) or value.get("attachment_id", str(attachment.id)) != str(
         attachment.id
     ):
-        return analysis
+        return await _timeout_if_stale(analysis, attachment, session)
     raw_status = str(value.get("status", ""))
     if raw_status not in {item.value for item in RecordStatus}:
-        return analysis
+        return await _timeout_if_stale(analysis, attachment, session)
     analysis.status = RecordStatus(raw_status)
     analysis.content_hash = value.get("content_hash")
     reported_model = value.get("model")
@@ -66,6 +86,10 @@ async def _sync_result(analysis: ImageAnalysis, session: AsyncSession) -> ImageA
         with suppress(ValueError):
             analysis.processed_at = datetime.fromisoformat(processed_at)
     if analysis.status == RecordStatus.PROCESSING:
+        reference_time = analysis.updated_at or analysis.created_at
+        age = (datetime.now(UTC) - reference_time).total_seconds()
+        if age >= get_settings().image_analysis_timeout_seconds:
+            return await _timeout_if_stale(analysis, attachment, session)
         attachment.status = AttachmentStatus.PROCESSING
     elif analysis.status == RecordStatus.FAILED:
         attachment.status = AttachmentStatus.FAILED

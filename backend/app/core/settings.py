@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     weather_max_age_seconds: int = 21_600
     image_analysis_model: str = "gemini-3.8-flash"
     image_analysis_lambda_name: str = "krishimitra-dev-image-analysis"
+    image_analysis_timeout_seconds: int = 120
     image_retention_days: int = 30
     assistance_rate_limit_per_minute: int = 10
     rag_default_top_k: int = 5
@@ -76,6 +77,7 @@ class Settings(BaseSettings):
         "live_data_cache_seconds",
         "weather_max_age_seconds",
         "image_retention_days",
+        "image_analysis_timeout_seconds",
     )
     @classmethod
     def validate_positive_phase5_value(cls, value: int) -> int:

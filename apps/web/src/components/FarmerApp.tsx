@@ -108,10 +108,12 @@ function StatusCard({
   title,
   text,
   tone = "green",
+  action,
 }: {
   title: string;
   text: string;
   tone?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className={`status-card ${tone}`}>
@@ -121,6 +123,7 @@ function StatusCard({
       <div>
         <strong>{title}</strong>
         <p>{text}</p>
+        {action}
       </div>
     </div>
   );
@@ -859,6 +862,21 @@ function Guidance({
       setBusy(false);
     }
   }
+  async function archiveHistory(id: string) {
+    setError("");
+    try {
+      await api.archiveChat(props.token, id);
+      props.refresh();
+      if (sessionId === id) {
+        setSessionId("");
+        setMessages([]);
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Unable to archive history",
+      );
+    }
+  }
   async function ask(text = question) {
     if (!text.trim() || !selectedCategory) return;
     setBusy(true);
@@ -937,7 +955,7 @@ function Guidance({
                   </button>
                   <button
                     aria-label="Archive"
-                    onClick={() => void api.archiveChat(props.token, item.id)}
+                    onClick={() => void archiveHistory(item.id)}
                   >
                     ×
                   </button>
@@ -1227,14 +1245,26 @@ function Faqs({ props }: { props: Props }) {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Faq[]>([]);
   const [selected, setSelected] = useState<Faq | null>(null);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     if (!props.token || !props.categories.length) return;
     Promise.all(
       props.categories.map((item) =>
-        api.faqs(props.token, item.slug, props.language).catch(() => []),
+        api.faqs(props.token, item.slug, props.language),
       ),
-    ).then((groups) => setRows(groups.flat()));
-  }, [props.token, props.categories, props.language]);
+    )
+      .then((groups) => {
+        setRows(groups.flat());
+        setError("");
+      })
+      .catch((reason: unknown) => {
+        setRows([]);
+        setError(
+          reason instanceof Error ? reason.message : "Unable to load questions",
+        );
+      });
+  }, [props.token, props.categories, props.language, reload]);
   const filtered = rows.filter(
     (item) =>
       (filter === "all" || item.category_slug.includes(filter)) &&
@@ -1271,6 +1301,23 @@ function Faqs({ props }: { props: Props }) {
         </div>
       </section>
       <div className="faq-list">
+        {error && (
+          <StatusCard
+            title="Questions could not be loaded"
+            text={error}
+            tone="red"
+            action={
+              <button
+                onClick={() => {
+                  setError("");
+                  setReload((value) => value + 1);
+                }}
+              >
+                Retry
+              </button>
+            }
+          />
+        )}
         {filtered.map((item) => (
           <article
             key={item.id}
@@ -1317,6 +1364,9 @@ function Upload({ props }: { props: Props }) {
   const [preview, setPreview] = useState("");
   const [question, setQuestion] = useState("");
   const [state, setState] = useState("Select an image to begin");
+  const [analysisId, setAnalysisId] = useState("");
+  const [attachmentId, setAttachmentId] = useState("");
+  const [busy, setBusy] = useState(false);
   const [analysis, setAnalysis] = useState<Awaited<
     ReturnType<typeof api.analysis>
   > | null>(null);
@@ -1336,13 +1386,37 @@ function Upload({ props }: { props: Props }) {
       return;
     }
     setFile(value);
+    setAnalysisId("");
+    setAttachmentId("");
+    setAnalysis(null);
     setPreview(URL.createObjectURL(value));
     setState("Ready to upload securely");
   }
+  async function poll(id: string) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const value = await api.analysis(props.token, id);
+      setAnalysis(value);
+      setState(value.status);
+      if (["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(value.status))
+        return true;
+    }
+    setState(
+      "Analysis is taking longer than expected. Retry checks the same upload.",
+    );
+    return false;
+  }
   async function analyze() {
     if (!file || !props.token) return;
+    setBusy(true);
     let chatId = props.chats.find((item) => !item.is_archived)?.id;
     try {
+      if (analysisId && attachmentId) {
+        setState("Retrying analysis for the existing upload…");
+        await api.analyzeUpload(props.token, attachmentId);
+        await poll(analysisId);
+        return;
+      }
       setState("Preparing secure upload…");
       if (!chatId) {
         const category =
@@ -1378,35 +1452,22 @@ function Upload({ props }: { props: Props }) {
       });
       if (!result.ok) throw new Error("Secure upload failed.");
       await api.completeUpload(props.token, upload.attachment_id);
+      setAttachmentId(upload.attachment_id);
       setState("Queued for visual analysis…");
       await api.analyzeUpload(props.token, upload.attachment_id);
       if (!upload.analysis_id)
         throw new Error("Analysis identifier was not returned.");
-      let terminal = false;
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        const value = await api.analysis(props.token, upload.analysis_id);
-        setAnalysis(value);
-        setState(value.status);
-        if (
-          ["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(value.status)
-        ) {
-          terminal = true;
-          break;
-        }
-      }
-      if (!terminal) {
-        setState(
-          "Analysis is taking longer than expected. Select Analyze again to retry status.",
-        );
-        return;
-      }
+      setAnalysisId(upload.analysis_id);
+      const terminal = await poll(upload.analysis_id);
+      if (!terminal) return;
       if (question.trim() && chatId)
         await api.ask(props.token, chatId, question, props.language, [
           upload.attachment_id,
         ]);
     } catch (reason) {
       setState(reason instanceof Error ? reason.message : "Analysis failed");
+    } finally {
+      setBusy(false);
     }
   }
   return (
@@ -1429,6 +1490,8 @@ function Upload({ props }: { props: Props }) {
                     setFile(null);
                     setPreview("");
                     setAnalysis(null);
+                    setAnalysisId("");
+                    setAttachmentId("");
                   }}
                 >
                   Remove
@@ -1467,9 +1530,13 @@ function Upload({ props }: { props: Props }) {
           <button
             className="primary wide"
             onClick={() => void analyze()}
-            disabled={!file}
+            disabled={!file || busy}
           >
-            Analyze Image
+            {busy
+              ? "Checking…"
+              : analysisId
+                ? "Retry Analysis"
+                : "Analyze Image"}
           </button>
         </div>
         <aside>
@@ -1605,6 +1672,7 @@ function ProfileScreen({ props }: { props: Props }) {
   const c = t(props.language);
   const profile = props.me?.profile;
   const farm = props.farms[0];
+  const cycle = props.activeCycle;
   const [fullName, setFullName] = useState("");
   const [stateName, setStateName] = useState("Maharashtra");
   const [district, setDistrict] = useState("");
@@ -1616,19 +1684,44 @@ function ProfileScreen({ props }: { props: Props }) {
   const [variety, setVariety] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [editing, setEditing] = useState<"profile" | "farm" | "cycle" | "">("");
+  function editProfile() {
+    if (!profile) return;
+    setFullName(profile.full_name);
+    setStateName(profile.state);
+    setDistrict(profile.district);
+    setTaluka(profile.taluka);
+    setVillage(profile.village ?? "");
+    setEditing("profile");
+  }
+  function editFarm() {
+    if (!farm) return;
+    setFarmName(farm.name ?? "");
+    setArea(farm.area_value);
+    setEditing("farm");
+  }
+  function editCycle() {
+    if (!cycle) return;
+    setSowingDate(cycle.sowing_date);
+    setVariety(cycle.crop_variety ?? "");
+    setEditing("cycle");
+  }
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     setFormError("");
     try {
-      await api.createProfile(props.token, {
+      const body = {
         full_name: fullName,
         preferred_language: props.language,
         state: stateName,
         district,
         taluka,
         village: village || null,
-      });
+      };
+      if (profile) await api.updateProfile(props.token, body);
+      else await api.createProfile(props.token, body);
+      setEditing("");
       props.refresh();
     } catch (reason) {
       setFormError(
@@ -1644,7 +1737,7 @@ function ProfileScreen({ props }: { props: Props }) {
     setSaving(true);
     setFormError("");
     try {
-      await api.createFarm(props.token, {
+      const body = {
         name: farmName || null,
         area_value: area,
         area_unit: "ACRE",
@@ -1654,7 +1747,10 @@ function ProfileScreen({ props }: { props: Props }) {
         village: profile.village,
         soil_type: null,
         irrigation_type: null,
-      });
+      } as const;
+      if (farm) await api.updateFarm(props.token, farm.id, body);
+      else await api.createFarm(props.token, body);
+      setEditing("");
       props.refresh();
     } catch (reason) {
       setFormError(
@@ -1670,17 +1766,23 @@ function ProfileScreen({ props }: { props: Props }) {
     setSaving(true);
     setFormError("");
     try {
-      await api.createCycle(props.token, {
-        farm_id: farm.id,
-        crop_name: "TUR",
-        crop_variety: variety || null,
-        sowing_date: sowingDate,
-        expected_harvest_date: null,
-        actual_harvest_date: null,
-        status: "ACTIVE",
-        estimated_crop_stage: null,
-        notes: null,
-      });
+      if (cycle) {
+        await api.updateCycle(props.token, cycle.id, {
+          crop_variety: variety || null,
+        });
+      } else
+        await api.createCycle(props.token, {
+          farm_id: farm.id,
+          crop_name: "TUR",
+          crop_variety: variety || null,
+          sowing_date: sowingDate,
+          expected_harvest_date: null,
+          actual_harvest_date: null,
+          status: "ACTIVE",
+          estimated_crop_stage: null,
+          notes: null,
+        });
+      setEditing("");
       props.refresh();
     } catch (reason) {
       setFormError(
@@ -1704,9 +1806,11 @@ function ProfileScreen({ props }: { props: Props }) {
           <span className="verified">✓ OTP account</span>
         </div>
       </section>
-      {!profile && (
+      {(!profile || editing === "profile") && (
         <form className="card onboarding-form" onSubmit={saveProfile}>
-          <h2>Complete farmer profile</h2>
+          <h2>
+            {profile ? "Update farmer profile" : "Complete farmer profile"}
+          </h2>
           <p>This information is required for location-aware Tur guidance.</p>
           <label>
             Full name
@@ -1748,13 +1852,13 @@ function ProfileScreen({ props }: { props: Props }) {
             />
           </label>
           <button className="primary" disabled={saving}>
-            {saving ? "Saving…" : "Save profile"}
+            {saving ? "Saving…" : profile ? "Update profile" : "Save profile"}
           </button>
         </form>
       )}
-      {profile && !farm && (
+      {profile && (!farm || editing === "farm") && (
         <form className="card onboarding-form" onSubmit={saveFarm}>
-          <h2>Add your farm</h2>
+          <h2>{farm ? "Update your farm" : "Add your farm"}</h2>
           <label>
             Farm name
             <input
@@ -1774,18 +1878,19 @@ function ProfileScreen({ props }: { props: Props }) {
             />
           </label>
           <button className="primary" disabled={saving}>
-            {saving ? "Saving…" : "Save farm"}
+            {saving ? "Saving…" : farm ? "Update farm" : "Save farm"}
           </button>
         </form>
       )}
-      {farm && !props.cycles.length && (
+      {farm && (!cycle || editing === "cycle") && (
         <form className="card onboarding-form" onSubmit={saveCycle}>
-          <h2>Start a Tur crop cycle</h2>
+          <h2>{cycle ? "Update Tur crop cycle" : "Start a Tur crop cycle"}</h2>
           <label>
             Sowing date
             <input
               required
               type="date"
+              disabled={Boolean(cycle)}
               value={sowingDate}
               onChange={(e) => setSowingDate(e.target.value)}
             />
@@ -1798,7 +1903,11 @@ function ProfileScreen({ props }: { props: Props }) {
             />
           </label>
           <button className="primary" disabled={saving}>
-            {saving ? "Saving…" : "Save crop cycle"}
+            {saving
+              ? "Saving…"
+              : cycle
+                ? "Update crop cycle"
+                : "Save crop cycle"}
           </button>
         </form>
       )}
@@ -1810,6 +1919,7 @@ function ProfileScreen({ props }: { props: Props }) {
       <div className="profile-grid">
         <article className="card tint-green">
           <h2>Personal Details</h2>
+          {profile && <button onClick={editProfile}>Edit profile</button>}
           <dl>
             <div>
               <dt>Location</dt>
@@ -1834,6 +1944,7 @@ function ProfileScreen({ props }: { props: Props }) {
         </article>
         <article className="card tint-blue">
           <h2>Farm Details</h2>
+          {farm && <button onClick={editFarm}>Edit farm</button>}
           <dl>
             <div>
               <dt>Farm</dt>
@@ -1847,6 +1958,7 @@ function ProfileScreen({ props }: { props: Props }) {
         </article>
         <article className="card tint-peach">
           <h2>Crop Cycles</h2>
+          {cycle && <button onClick={editCycle}>Edit active cycle</button>}
           <p>
             {props.cycles.length} recorded crop cycle
             {props.cycles.length === 1 ? "" : "s"}

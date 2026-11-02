@@ -55,6 +55,7 @@ type Farm = {
 type Cycle = {
   id: string;
   crop_name: string;
+  crop_variety?: string;
   sowing_date: string;
   expected_harvest_date?: string;
   status: string;
@@ -655,6 +656,7 @@ export default function App() {
               categories[0])
         }
         chats={chats}
+        refresh={() => setRefreshVersion((value) => value + 1)}
         general={screen === "ask"}
       />
     );
@@ -790,14 +792,20 @@ function ProfileOnboarding({
     [area, setArea] = useState(""),
     [sowingDate, setSowingDate] = useState(""),
     [variety, setVariety] = useState(""),
-    [busy, setBusy] = useState(false);
-  async function save(path: string, body: Record<string, unknown>) {
+    [busy, setBusy] = useState(false),
+    [editing, setEditing] = useState<"profile" | "farm" | "cycle" | "">("");
+  async function save(
+    path: string,
+    body: Record<string, unknown>,
+    method = "POST",
+  ) {
     setBusy(true);
     try {
       await request(path, token, {
-        method: "POST",
+        method,
         body: JSON.stringify(body),
       });
+      setEditing("");
       refresh();
     } catch (e) {
       Alert.alert("Profile", e instanceof Error ? e.message : "Unable to save");
@@ -806,6 +814,7 @@ function ProfileOnboarding({
     }
   }
   const farm = farms[0];
+  const cycle = cycles.find((item) => item.status === "ACTIVE") ?? cycles[0];
   return (
     <Shell {...shell} title="My Profile">
       <Card tone="green">
@@ -821,9 +830,26 @@ function ProfileOnboarding({
             : "Complete your farmer profile"}
         </Text>
       </Card>
-      {!profile && (
+      {profile && editing !== "profile" && (
+        <Pressable
+          style={s.secondary}
+          onPress={() => {
+            setName(profile.full_name);
+            setStateName(profile.state);
+            setDistrict(profile.district);
+            setTaluka(profile.taluka);
+            setVillage(profile.village ?? "");
+            setEditing("profile");
+          }}
+        >
+          <Text style={s.secondaryText}>Edit profile</Text>
+        </Pressable>
+      )}
+      {(!profile || editing === "profile") && (
         <Card>
-          <Text style={s.section}>Complete farmer profile</Text>
+          <Text style={s.section}>
+            {profile ? "Update farmer profile" : "Complete farmer profile"}
+          </Text>
           <TextInput
             style={s.input}
             placeholder="Full name"
@@ -858,23 +884,43 @@ function ProfileOnboarding({
             disabled={busy || !name || !district || !taluka}
             style={s.primary}
             onPress={() =>
-              save("/farmer/profile", {
-                full_name: name,
-                preferred_language: shell.language,
-                state: stateName,
-                district,
-                taluka,
-                village: village || null,
-              })
+              save(
+                "/farmer/profile",
+                {
+                  full_name: name,
+                  preferred_language: shell.language,
+                  state: stateName,
+                  district,
+                  taluka,
+                  village: village || null,
+                },
+                profile ? "PATCH" : "POST",
+              )
             }
           >
-            <Text style={s.whiteBold}>Save profile</Text>
+            <Text style={s.whiteBold}>
+              {profile ? "Update profile" : "Save profile"}
+            </Text>
           </Pressable>
         </Card>
       )}
-      {profile && !farm && (
+      {farm && editing !== "farm" && (
+        <Pressable
+          style={s.secondary}
+          onPress={() => {
+            setFarmName(farm.name ?? "");
+            setArea(farm.area_value);
+            setEditing("farm");
+          }}
+        >
+          <Text style={s.secondaryText}>Edit farm</Text>
+        </Pressable>
+      )}
+      {profile && (!farm || editing === "farm") && (
         <Card>
-          <Text style={s.section}>Add your farm</Text>
+          <Text style={s.section}>
+            {farm ? "Update your farm" : "Add your farm"}
+          </Text>
           <TextInput
             style={s.input}
             placeholder="Farm name"
@@ -892,31 +938,52 @@ function ProfileOnboarding({
             disabled={busy || !area}
             style={s.primary}
             onPress={() =>
-              save("/farms", {
-                name: farmName || null,
-                area_value: area,
-                area_unit: "ACRE",
-                state: profile.state,
-                district: profile.district,
-                taluka: profile.taluka,
-                village: profile.village ?? null,
-                soil_type: null,
-                irrigation_type: null,
-              })
+              save(
+                farm ? `/farms/${farm.id}` : "/farms",
+                {
+                  name: farmName || null,
+                  area_value: area,
+                  area_unit: "ACRE",
+                  state: profile.state,
+                  district: profile.district,
+                  taluka: profile.taluka,
+                  village: profile.village ?? null,
+                  soil_type: null,
+                  irrigation_type: null,
+                },
+                farm ? "PATCH" : "POST",
+              )
             }
           >
-            <Text style={s.whiteBold}>Save farm</Text>
+            <Text style={s.whiteBold}>
+              {farm ? "Update farm" : "Save farm"}
+            </Text>
           </Pressable>
         </Card>
       )}
-      {farm && !cycles.length && (
+      {cycle && editing !== "cycle" && (
+        <Pressable
+          style={s.secondary}
+          onPress={() => {
+            setSowingDate(cycle.sowing_date);
+            setVariety(cycle.crop_variety ?? "");
+            setEditing("cycle");
+          }}
+        >
+          <Text style={s.secondaryText}>Edit crop cycle</Text>
+        </Pressable>
+      )}
+      {farm && (!cycle || editing === "cycle") && (
         <Card>
-          <Text style={s.section}>Start a Tur crop cycle</Text>
+          <Text style={s.section}>
+            {cycle ? "Update Tur crop cycle" : "Start a Tur crop cycle"}
+          </Text>
           <TextInput
             style={s.input}
             placeholder="Sowing date (YYYY-MM-DD)"
             value={sowingDate}
             onChangeText={setSowingDate}
+            editable={!cycle}
           />
           <TextInput
             style={s.input}
@@ -928,16 +995,24 @@ function ProfileOnboarding({
             disabled={busy || !/^\d{4}-\d{2}-\d{2}$/.test(sowingDate)}
             style={s.primary}
             onPress={() =>
-              save("/crop-cycles", {
-                farm_id: farm.id,
-                crop_name: "TUR",
-                crop_variety: variety || null,
-                sowing_date: sowingDate,
-                status: "ACTIVE",
-              })
+              save(
+                cycle ? `/crop-cycles/${cycle.id}` : "/crop-cycles",
+                cycle
+                  ? { crop_variety: variety || null }
+                  : {
+                      farm_id: farm.id,
+                      crop_name: "TUR",
+                      crop_variety: variety || null,
+                      sowing_date: sowingDate,
+                      status: "ACTIVE",
+                    },
+                cycle ? "PATCH" : "POST",
+              )
             }
           >
-            <Text style={s.whiteBold}>Save crop cycle</Text>
+            <Text style={s.whiteBold}>
+              {cycle ? "Update crop cycle" : "Save crop cycle"}
+            </Text>
           </Pressable>
         </Card>
       )}
@@ -1048,12 +1123,14 @@ function ChatScreen({
   token,
   category,
   chats,
+  refresh,
   general,
   ...shell
 }: {
   token: string;
   category?: Category;
   chats: Chat[];
+  refresh: () => void;
   general: boolean;
   language: Language;
   setLanguage: (v: Language) => void;
@@ -1088,6 +1165,24 @@ function ChatScreen({
       );
     } finally {
       setBusy(false);
+    }
+  }
+  async function archiveHistory(id: string) {
+    try {
+      await request(`/chat/sessions/${id}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ is_archived: true }),
+      });
+      if (sessionId === id) {
+        setSessionId("");
+        setMessages([]);
+      }
+      refresh();
+    } catch (e) {
+      Alert.alert(
+        "Chat History",
+        e instanceof Error ? e.message : "Unable to archive",
+      );
     }
   }
   async function ask(text = question) {
@@ -1213,16 +1308,24 @@ function ChatScreen({
         </Pressable>
       </View>
       <Text style={s.section}>Chat History</Text>
-      {chats.slice(0, 5).map((c) => (
-        <Pressable key={c.id} onPress={() => openHistory(c.id)}>
-          <Card>
-            <Text style={s.bold}>{c.title ?? "Farmer question"}</Text>
-            <Text style={s.muted}>
-              {new Date(c.updated_at).toLocaleString()}
-            </Text>
-          </Card>
-        </Pressable>
-      ))}
+      {chats
+        .filter((c) => !c.is_archived)
+        .slice(0, 5)
+        .map((c) => (
+          <View key={c.id}>
+            <Pressable onPress={() => openHistory(c.id)}>
+              <Card>
+                <Text style={s.bold}>{c.title ?? "Farmer question"}</Text>
+                <Text style={s.muted}>
+                  {new Date(c.updated_at).toLocaleString()}
+                </Text>
+              </Card>
+            </Pressable>
+            <Pressable style={s.secondary} onPress={() => archiveHistory(c.id)}>
+              <Text style={s.secondaryText}>Archive conversation</Text>
+            </Pressable>
+          </View>
+        ))}
     </Shell>
   );
 }
@@ -1240,17 +1343,27 @@ function FaqScreen({
 }) {
   const [rows, setRows] = useState<Faq[]>([]),
     [search, setSearch] = useState(""),
-    [open, setOpen] = useState("");
+    [open, setOpen] = useState(""),
+    [error, setError] = useState(""),
+    [reload, setReload] = useState(0);
   useEffect(() => {
     Promise.all(
       categories.map((c) =>
         request<Faq[]>(
           `/problem-categories/${c.slug}/faqs?language=${shell.language}`,
           token,
-        ).catch(() => []),
+        ),
       ),
-    ).then((v) => setRows(v.flat()));
-  }, [categories, token, shell.language]);
+    )
+      .then((v) => {
+        setRows(v.flat());
+        setError("");
+      })
+      .catch((e) => {
+        setRows([]);
+        setError(e instanceof Error ? e.message : "Unable to load questions");
+      });
+  }, [categories, token, shell.language, reload]);
   return (
     <Shell {...shell} title="Popular Questions">
       <TextInput
@@ -1259,6 +1372,20 @@ function FaqScreen({
         onChangeText={setSearch}
         placeholder="Search questions…"
       />
+      {error && (
+        <>
+          <Empty title="Questions could not be loaded" text={error} />
+          <Pressable
+            style={s.secondary}
+            onPress={() => {
+              setError("");
+              setReload((value) => value + 1);
+            }}
+          >
+            <Text style={s.secondaryText}>Retry</Text>
+          </Pressable>
+        </>
+      )}
       {rows
         .filter((f) => f.question.toLowerCase().includes(search.toLowerCase()))
         .map((f) => (
@@ -1305,7 +1432,10 @@ function Upload({
 }) {
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null),
     [state, setState] = useState("Select an image to begin"),
-    [analysis, setAnalysis] = useState<Record<string, unknown> | null>(null);
+    [analysis, setAnalysis] = useState<Record<string, unknown> | null>(null),
+    [analysisId, setAnalysisId] = useState(""),
+    [attachmentId, setAttachmentId] = useState(""),
+    [busy, setBusy] = useState(false);
   async function pick(camera: boolean) {
     const p = camera
       ? await ImagePicker.requestCameraPermissionsAsync()
@@ -1323,11 +1453,55 @@ function Upload({
           mediaTypes: ["images"],
           quality: 0.9,
         });
-    if (!r.canceled && r.assets[0]) setAsset(r.assets[0]);
+    if (!r.canceled && r.assets[0]) {
+      const selectedAsset = r.assets[0];
+      const mime = selectedAsset.mimeType ?? "";
+      const size = selectedAsset.fileSize;
+      if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(mime)) {
+        setState("Use a JPEG, PNG or WebP image.");
+        return;
+      }
+      if (!size || size > 10 * 1024 * 1024) {
+        setState("The image size must be available and no larger than 10 MB.");
+        return;
+      }
+      setAsset(selectedAsset);
+      setAnalysis(null);
+      setAnalysisId("");
+      setAttachmentId("");
+      setState("Ready to upload securely");
+    }
+  }
+  async function poll(id: string) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const value = await request<Record<string, unknown>>(
+        `/image-analyses/${id}`,
+        token,
+      );
+      setAnalysis(value);
+      const status = String(value.status ?? "PROCESSING");
+      setState(status.replaceAll("_", " "));
+      if (["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(status))
+        return true;
+    }
+    setState(
+      "Analysis is taking longer than expected. Retry checks the same upload.",
+    );
+    return false;
   }
   async function analyze() {
     if (!asset) return;
+    setBusy(true);
     try {
+      if (analysisId && attachmentId) {
+        setState("Retrying analysis for the existing upload…");
+        await request(`/attachments/${attachmentId}/analyze`, token, {
+          method: "POST",
+        });
+        await poll(analysisId);
+        return;
+      }
       setState("Preparing secure upload…");
       let chatId = chats.find((c) => !c.is_archived)?.id;
       if (!chatId) {
@@ -1375,6 +1549,7 @@ function Upload({
       await request(`/attachments/${u.attachment_id}/complete`, token, {
         method: "POST",
       });
+      setAttachmentId(u.attachment_id);
       const queued = await request<{ id?: string; status?: string }>(
         `/attachments/${u.attachment_id}/analyze`,
         token,
@@ -1382,30 +1557,16 @@ function Upload({
           method: "POST",
         },
       );
-      const analysisId = u.analysis_id ?? queued.id;
-      if (!analysisId) throw new Error("Analysis identifier was not returned");
+      const returnedAnalysisId = u.analysis_id ?? queued.id;
+      if (!returnedAnalysisId)
+        throw new Error("Analysis identifier was not returned");
+      setAnalysisId(returnedAnalysisId);
       setState("Analyzing image…");
-      let terminal = false;
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        const value = await request<Record<string, unknown>>(
-          `/image-analyses/${analysisId}`,
-          token,
-        );
-        setAnalysis(value);
-        const status = String(value.status ?? "PROCESSING");
-        setState(status.replaceAll("_", " "));
-        if (["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(status)) {
-          terminal = true;
-          break;
-        }
-      }
-      if (!terminal)
-        setState(
-          "Analysis is taking longer than expected. Tap Analyze Image to retry.",
-        );
+      await poll(returnedAnalysisId);
     } catch (e) {
       setState(e instanceof Error ? e.message : "Analysis failed");
+    } finally {
+      setBusy(false);
     }
   }
   return (
@@ -1435,9 +1596,15 @@ function Upload({
         <Pressable
           style={[s.primary, !asset && s.disabled]}
           onPress={analyze}
-          disabled={!asset}
+          disabled={!asset || busy}
         >
-          <Text style={s.whiteBold}>Analyze Image</Text>
+          <Text style={s.whiteBold}>
+            {busy
+              ? "Checking…"
+              : analysisId
+                ? "Retry Analysis"
+                : "Analyze Image"}
+          </Text>
         </Pressable>
       </Card>
       <Empty title="Analysis status" text={state} />

@@ -3,16 +3,45 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const app = readFileSync(new URL("../src/components/FarmerApp.tsx", import.meta.url), "utf8");
+const app = readFileSync(
+  new URL("../src/components/FarmerApp.tsx", import.meta.url),
+  "utf8",
+);
 const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
-const screens = ["home", "weather", "market", "guidance", "ask", "crop", "advisory", "faqs", "upload", "history", "notifications", "profile"];
+const screens = [
+  "home",
+  "weather",
+  "market",
+  "guidance",
+  "ask",
+  "crop",
+  "advisory",
+  "faqs",
+  "upload",
+  "history",
+  "notifications",
+  "profile",
+];
 
 test("Phase 6 web exposes every approved authenticated destination", () => {
-  for (const screen of screens) assert.match(app, new RegExp(`[\"']${screen}[\"']`), `missing ${screen}`);
+  for (const screen of screens)
+    assert.match(app, new RegExp(`[\"']${screen}[\"']`), `missing ${screen}`);
 });
 
 test("Phase 6 web consumes existing backend contracts", () => {
-  for (const route of ["/me", "/farmer/profile", "/farms", "/crop-cycles", "/problem-categories", "/chat/sessions", "/assistance/sessions", "/live/weather", "/live/markets", "/attachments/upload", "/image-analyses/"]) {
+  for (const route of [
+    "/me",
+    "/farmer/profile",
+    "/farms",
+    "/crop-cycles",
+    "/problem-categories",
+    "/chat/sessions",
+    "/assistance/sessions",
+    "/live/weather",
+    "/live/markets",
+    "/attachments/upload",
+    "/image-analyses/",
+  ]) {
     assert.ok(api.includes(route), `missing ${route}`);
   }
 });
@@ -30,7 +59,9 @@ test("farmer SMS OTP uses Cognito's required challenge response contract", () =>
 });
 
 test("web phone normalization accepts Indian forms and rejects malformed values", () => {
-  const source = api.match(/export function normalizePhone\(phone: string\) \{[\s\S]*?\n\}/)?.[0];
+  const source = api.match(
+    /export function normalizePhone\(phone: string\) \{[\s\S]*?\n\}/,
+  )?.[0];
   assert.ok(source, "normalizePhone implementation is missing");
   const normalizePhone = vm.runInNewContext(
     `(${source.replace("export ", "").replace("phone: string", "phone")})`,
@@ -43,8 +74,24 @@ test("web phone normalization accepts Indian forms and rejects malformed values"
 
 test("web clears farmer authentication on any backend 401", () => {
   assert.match(api, /response\.status === 401.*unauthorizedHandler/s);
-  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const page = readFileSync(
+    new URL("../src/app/page.tsx", import.meta.url),
+    "utf8",
+  );
   assert.match(page, /setUnauthorizedHandler/);
   assert.match(page, /removeItem\("krishimitra\.token"\)/);
   assert.match(page, /setScreen\("login"\)/);
+});
+
+test("Phase 2 web supports onboarding updates and recoverable farmer workflows", () => {
+  for (const route of ["updateProfile", "updateFarm", "updateCycle"])
+    assert.match(api, new RegExp(route));
+  for (const behavior of [
+    "archiveHistory",
+    "Retry Analysis",
+    "Questions could not be loaded",
+  ])
+    assert.match(app, new RegExp(behavior));
+  assert.match(app, /analysisId && attachmentId/);
+  assert.match(app, /Retry checks the same upload/i);
 });

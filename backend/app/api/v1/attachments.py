@@ -35,13 +35,14 @@ IMAGE_EXTENSIONS = {
 
 
 async def _owned_attachment(
-    session: AsyncSession, user_id: UUID, attachment_id: UUID
+    session: AsyncSession, user_id: UUID, attachment_id: UUID, *, lock: bool = False
 ) -> MessageAttachment:
-    value = await session.scalar(
-        select(MessageAttachment).where(
-            MessageAttachment.id == attachment_id, MessageAttachment.user_id == user_id
-        )
+    statement = select(MessageAttachment).where(
+        MessageAttachment.id == attachment_id, MessageAttachment.user_id == user_id
     )
+    if lock:
+        statement = statement.with_for_update()
+    value = await session.scalar(statement)
     if value is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
     return value
@@ -161,7 +162,7 @@ async def initiate_attachment_upload(
 async def complete_attachment_upload(
     attachment_id: UUID, current_user: FarmerUser, session: Session
 ) -> MessageAttachment:
-    attachment = await _owned_attachment(session, current_user.id, attachment_id)
+    attachment = await _owned_attachment(session, current_user.id, attachment_id, lock=True)
     if attachment.status not in (
         AttachmentStatus.PENDING_UPLOAD,
         AttachmentStatus.PROCESSING,
@@ -224,7 +225,7 @@ async def complete_attachment_upload(
 async def request_image_analysis(
     attachment_id: UUID, current_user: FarmerUser, session: Session
 ) -> ImageAnalysis:
-    attachment = await _owned_attachment(session, current_user.id, attachment_id)
+    attachment = await _owned_attachment(session, current_user.id, attachment_id, lock=True)
     if attachment.attachment_type != AttachmentType.IMAGE:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -234,6 +235,7 @@ async def request_image_analysis(
         AttachmentStatus.PENDING_ANALYSIS,
         AttachmentStatus.PROCESSING,
         AttachmentStatus.COMPLETED,
+        AttachmentStatus.FAILED,
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Image is not ready")
     analysis = await session.scalar(
@@ -244,26 +246,43 @@ async def request_image_analysis(
     )
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    if attachment.status == AttachmentStatus.PENDING_ANALYSIS:
+    if attachment.status in (AttachmentStatus.PENDING_ANALYSIS, AttachmentStatus.FAILED):
         settings = get_settings()
         client: Any = boto3.client("lambda", region_name=settings.aws_region)
-        client.invoke(
-            FunctionName=settings.image_analysis_lambda_name,
-            InvocationType="Event",
-            Payload=json.dumps(
-                {
-                    "Records": [
-                        {
-                            "eventSource": "krishimitra.api",
-                            "s3": {
-                                "bucket": {"name": attachment.bucket_name},
-                                "object": {"key": attachment.s3_key},
-                            },
-                        }
-                    ]
-                }
-            ).encode(),
-        )
+        try:
+            client.invoke(
+                FunctionName=settings.image_analysis_lambda_name,
+                InvocationType="Event",
+                Payload=json.dumps(
+                    {
+                        "Records": [
+                            {
+                                "eventSource": "krishimitra.api",
+                                "s3": {
+                                    "bucket": {"name": attachment.bucket_name},
+                                    "object": {"key": attachment.s3_key},
+                                },
+                            }
+                        ]
+                    }
+                ).encode(),
+            )
+        except Exception as exc:
+            attachment.status = AttachmentStatus.FAILED
+            analysis.status = RecordStatus.FAILED
+            analysis.error_code = "ANALYSIS_INVOCATION_FAILED"
+            analysis.processed_at = datetime.now(UTC)
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Image analysis could not be started",
+            ) from exc
+        attachment.status = AttachmentStatus.PROCESSING
+        analysis.status = RecordStatus.PROCESSING
+        analysis.error_code = None
+        analysis.processed_at = None
+        await session.commit()
+        await session.refresh(analysis)
     return analysis
 
 

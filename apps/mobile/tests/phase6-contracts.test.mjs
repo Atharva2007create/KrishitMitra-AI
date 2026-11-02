@@ -69,3 +69,18 @@ test("mobile clears farmer authentication on any backend 401", () => {
   assert.match(app, /setToken\(""\)/);
   assert.match(app, /setScreen\("login"\)/);
 });
+
+test("Phase 2 mobile supports onboarding updates and recoverable farmer workflows", () => {
+  for (const value of [
+    "Edit profile",
+    "Edit farm",
+    "Edit crop cycle",
+    "Archive conversation",
+    "Retry Analysis",
+    "Questions could not be loaded",
+  ]) {
+    assert.match(app, new RegExp(value));
+  }
+  assert.match(app, /analysisId && attachmentId/);
+  assert.match(app, /Retry checks the same upload/i);
+});
