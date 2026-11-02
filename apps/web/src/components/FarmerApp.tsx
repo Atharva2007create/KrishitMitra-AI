@@ -31,6 +31,7 @@ type Props = {
   error: string;
   authenticated: (token: string) => void;
   logout: () => void;
+  refresh: () => void;
 };
 const icon: Record<string, string> = {
   SOWING_SEEDS: "🌱",
@@ -166,16 +167,20 @@ function Login({
   const [session, setSession] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  async function startOtp() {
+    const value = await sendOtp(phone);
+    if (value.ChallengeName !== "SMS_OTP" || !value.Session)
+      throw new Error("Cognito did not start an SMS OTP challenge.");
+    setOtp("");
+    setSession(value.Session);
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
       if (!session) {
-        const value = await sendOtp(phone);
-        if (!value.Session)
-          throw new Error("Cognito did not start an SMS OTP challenge.");
-        setSession(value.Session);
+        await startOtp();
       } else authenticated(await verifyOtp(phone, otp, session));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Login failed");
@@ -230,7 +235,7 @@ function Login({
               <input
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
-                placeholder="Enter 6-digit OTP"
+                placeholder="Enter the OTP from SMS"
                 inputMode="numeric"
                 required
                 autoFocus
@@ -240,6 +245,44 @@ function Login({
           <button className="primary wide" disabled={busy}>
             {busy ? c.loading : session ? c.verify : c.sendOtp}
           </button>
+          {session && (
+            <div className="otp-actions">
+              <button
+                type="button"
+                className="link-button"
+                disabled={busy}
+                onClick={() => {
+                  setSession("");
+                  setOtp("");
+                  setError("");
+                }}
+              >
+                Change number
+              </button>
+              <button
+                type="button"
+                className="link-button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await startOtp();
+                  } catch (reason) {
+                    setError(
+                      reason instanceof Error
+                        ? reason.message
+                        : "Unable to resend OTP",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Resend OTP
+              </button>
+            </div>
+          )}
         </form>
         {error && (
           <p className="form-error" role="alert">
@@ -1010,9 +1053,7 @@ function CropScreen({ props }: { props: Props }) {
   const days = cycle
     ? Math.max(
         0,
-        Math.floor(
-          (today - new Date(cycle.sowing_date).getTime()) / 86400000,
-        ),
+        Math.floor((today - new Date(cycle.sowing_date).getTime()) / 86400000),
       )
     : 0;
   return (
@@ -1341,6 +1382,7 @@ function Upload({ props }: { props: Props }) {
       await api.analyzeUpload(props.token, upload.attachment_id);
       if (!upload.analysis_id)
         throw new Error("Analysis identifier was not returned.");
+      let terminal = false;
       for (let attempt = 0; attempt < 20; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const value = await api.analysis(props.token, upload.analysis_id);
@@ -1348,8 +1390,16 @@ function Upload({ props }: { props: Props }) {
         setState(value.status);
         if (
           ["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(value.status)
-        )
+        ) {
+          terminal = true;
           break;
+        }
+      }
+      if (!terminal) {
+        setState(
+          "Analysis is taking longer than expected. Select Analyze again to retry status.",
+        );
+        return;
       }
       if (question.trim() && chatId)
         await api.ask(props.token, chatId, question, props.language, [
@@ -1555,6 +1605,91 @@ function ProfileScreen({ props }: { props: Props }) {
   const c = t(props.language);
   const profile = props.me?.profile;
   const farm = props.farms[0];
+  const [fullName, setFullName] = useState("");
+  const [stateName, setStateName] = useState("Maharashtra");
+  const [district, setDistrict] = useState("");
+  const [taluka, setTaluka] = useState("");
+  const [village, setVillage] = useState("");
+  const [farmName, setFarmName] = useState("");
+  const [area, setArea] = useState("");
+  const [sowingDate, setSowingDate] = useState("");
+  const [variety, setVariety] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setFormError("");
+    try {
+      await api.createProfile(props.token, {
+        full_name: fullName,
+        preferred_language: props.language,
+        state: stateName,
+        district,
+        taluka,
+        village: village || null,
+      });
+      props.refresh();
+    } catch (reason) {
+      setFormError(
+        reason instanceof Error ? reason.message : "Unable to save profile",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function saveFarm(event: FormEvent) {
+    event.preventDefault();
+    if (!profile) return;
+    setSaving(true);
+    setFormError("");
+    try {
+      await api.createFarm(props.token, {
+        name: farmName || null,
+        area_value: area,
+        area_unit: "ACRE",
+        state: profile.state,
+        district: profile.district,
+        taluka: profile.taluka,
+        village: profile.village,
+        soil_type: null,
+        irrigation_type: null,
+      });
+      props.refresh();
+    } catch (reason) {
+      setFormError(
+        reason instanceof Error ? reason.message : "Unable to save farm",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function saveCycle(event: FormEvent) {
+    event.preventDefault();
+    if (!farm) return;
+    setSaving(true);
+    setFormError("");
+    try {
+      await api.createCycle(props.token, {
+        farm_id: farm.id,
+        crop_name: "TUR",
+        crop_variety: variety || null,
+        sowing_date: sowingDate,
+        expected_harvest_date: null,
+        actual_harvest_date: null,
+        status: "ACTIVE",
+        estimated_crop_stage: null,
+        notes: null,
+      });
+      props.refresh();
+    } catch (reason) {
+      setFormError(
+        reason instanceof Error ? reason.message : "Unable to save crop cycle",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <Shell
       props={props}
@@ -1569,6 +1704,109 @@ function ProfileScreen({ props }: { props: Props }) {
           <span className="verified">✓ OTP account</span>
         </div>
       </section>
+      {!profile && (
+        <form className="card onboarding-form" onSubmit={saveProfile}>
+          <h2>Complete farmer profile</h2>
+          <p>This information is required for location-aware Tur guidance.</p>
+          <label>
+            Full name
+            <input
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </label>
+          <label>
+            State
+            <input
+              required
+              value={stateName}
+              onChange={(e) => setStateName(e.target.value)}
+            />
+          </label>
+          <label>
+            District
+            <input
+              required
+              value={district}
+              onChange={(e) => setDistrict(e.target.value)}
+            />
+          </label>
+          <label>
+            Taluka
+            <input
+              required
+              value={taluka}
+              onChange={(e) => setTaluka(e.target.value)}
+            />
+          </label>
+          <label>
+            Village
+            <input
+              value={village}
+              onChange={(e) => setVillage(e.target.value)}
+            />
+          </label>
+          <button className="primary" disabled={saving}>
+            {saving ? "Saving…" : "Save profile"}
+          </button>
+        </form>
+      )}
+      {profile && !farm && (
+        <form className="card onboarding-form" onSubmit={saveFarm}>
+          <h2>Add your farm</h2>
+          <label>
+            Farm name
+            <input
+              value={farmName}
+              onChange={(e) => setFarmName(e.target.value)}
+            />
+          </label>
+          <label>
+            Area in acres
+            <input
+              required
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+            />
+          </label>
+          <button className="primary" disabled={saving}>
+            {saving ? "Saving…" : "Save farm"}
+          </button>
+        </form>
+      )}
+      {farm && !props.cycles.length && (
+        <form className="card onboarding-form" onSubmit={saveCycle}>
+          <h2>Start a Tur crop cycle</h2>
+          <label>
+            Sowing date
+            <input
+              required
+              type="date"
+              value={sowingDate}
+              onChange={(e) => setSowingDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Variety, if known
+            <input
+              value={variety}
+              onChange={(e) => setVariety(e.target.value)}
+            />
+          </label>
+          <button className="primary" disabled={saving}>
+            {saving ? "Saving…" : "Save crop cycle"}
+          </button>
+        </form>
+      )}
+      {formError && (
+        <p className="form-error" role="alert">
+          {formError}
+        </p>
+      )}
       <div className="profile-grid">
         <article className="card tint-green">
           <h2>Personal Details</h2>

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from collections import defaultdict, deque
@@ -13,7 +14,7 @@ from app.ingestion.taxonomy import infer_topic
 from app.integrations.ai import AIProvider, GenerationRequest
 from app.integrations.ai.base import AIProviderError, GenerationEvidence
 from app.integrations.ai.policy import has_prompt_injection
-from app.integrations.government import LiveAgricultureDataService
+from app.integrations.government import LiveAgricultureDataService, get_live_data_service
 from app.integrations.government.http import GovernmentSourceError
 from app.models.entities import (
     ChatSession,
@@ -33,6 +34,7 @@ from app.schemas.assistance import (
     AssistanceResponse,
     FaqCitationResponse,
 )
+from app.services.faq import validate_numeric_fidelity
 from app.services.retrieval import RetrievalService
 
 logger = logging.getLogger(__name__)
@@ -57,12 +59,23 @@ LIVE_MARKET_TERMS = (
     "बाजार भाव",
 )
 PESTICIDE_RESTRICTED_TERMS = (
+    "pesticide",
+    "insecticide",
+    "fungicide",
+    "herbicide",
     "dosage",
     "dose",
     "concentration",
     "waiting period",
     "application frequency",
     "how often",
+    "ml per litre",
+    "ml/l",
+    "per acre",
+    "spray interval",
+    "कीटनाशक",
+    "फफूंदनाशक",
+    "तणनाशक",
     "कितनी मात्रा",
     "खुराक",
     "प्रमाण",
@@ -163,16 +176,18 @@ class RateLimitExceeded(RuntimeError):
 class AssistanceRateLimiter:
     def __init__(self) -> None:
         self._requests: dict[UUID, deque[datetime]] = defaultdict(deque)
+        self._lock = asyncio.Lock()
 
-    def check(self, user_id: UUID, limit: int) -> None:
-        now = datetime.now(UTC)
-        cutoff = now - timedelta(minutes=1)
-        bucket = self._requests[user_id]
-        while bucket and bucket[0] < cutoff:
-            bucket.popleft()
-        if len(bucket) >= limit:
-            raise RateLimitExceeded("Personalized assistance rate limit exceeded")
-        bucket.append(now)
+    async def check(self, user_id: UUID, limit: int) -> None:
+        async with self._lock:
+            now = datetime.now(UTC)
+            cutoff = now - timedelta(minutes=1)
+            bucket = self._requests[user_id]
+            while bucket and bucket[0] < cutoff:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                raise RateLimitExceeded("Personalized assistance rate limit exceeded")
+            bucket.append(now)
 
 
 rate_limiter = AssistanceRateLimiter()
@@ -191,7 +206,7 @@ class GuidedAssistanceService:
         self.retrieval = retrieval
         self.ai = ai
         self.settings = settings
-        self.live_data = live_data or LiveAgricultureDataService(settings)
+        self.live_data = live_data or get_live_data_service()
 
     async def _persist_external_response(
         self,
@@ -428,7 +443,7 @@ class GuidedAssistanceService:
         requested_language: Language | None,
         attachment_ids: list[UUID],
     ) -> AssistanceResponse:
-        rate_limiter.check(user.id, self.settings.assistance_rate_limit_per_minute)
+        await rate_limiter.check(user.id, self.settings.assistance_rate_limit_per_minute)
         if len(question) > self.settings.assistance_max_question_length:
             raise ValueError("Question exceeds configured maximum length")
         chat, category, profile, cycle, farm = await self._owned_context(user, session_id)
@@ -572,6 +587,17 @@ class GuidedAssistanceService:
                 [*flags, "NO_VERIFIED_EVIDENCE"],
                 persist_user=False,
             )
+        if any(item.requires_regulatory_validation for item in result.results):
+            return await self._persist_safe_response(
+                chat,
+                question,
+                language,
+                intent,
+                EvidenceStatus.REQUIRES_REGULATORY_VALIDATION,
+                category,
+                [*flags, "REGULATORY_EVIDENCE_REQUIRES_VALIDATION"],
+                persist_user=False,
+            )
 
         gemini_started = perf_counter()
         try:
@@ -592,6 +618,24 @@ class GuidedAssistanceService:
         except AIProviderError:
             logger.exception("assistance_generation_failure", extra={"session_id": str(chat.id)})
             raise
+        try:
+            validate_numeric_fidelity(
+                "\n".join(item.content for item in result.results), generated.answer
+            )
+        except ValueError:
+            logger.warning(
+                "assistance_numeric_fidelity_failure", extra={"session_id": str(chat.id)}
+            )
+            return await self._persist_safe_response(
+                chat,
+                question,
+                language,
+                intent,
+                EvidenceStatus.INSUFFICIENT,
+                category,
+                [*flags, "UNSUPPORTED_NUMERIC_CLAIM"],
+                persist_user=False,
+            )
 
         assistant = Message(
             chat_session_id=chat.id,

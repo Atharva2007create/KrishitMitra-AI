@@ -14,18 +14,18 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "expo": "latest",
-    "expo-image-picker": "latest",
-    "expo-status-bar": "latest",
-    "react": "latest",
-    "react-native": "latest"
+    "expo": "57.0.27",
+    "expo-image-picker": "57.0.20",
+    "expo-status-bar": "57.0.1",
+    "react": "19.3.0",
+    "react-native": "0.87.1"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "eslint": "latest",
-    "eslint-config-expo": "latest",
-    "prettier": "latest",
-    "typescript": "latest"
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-expo": "57.0.2",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3"
   }
 }

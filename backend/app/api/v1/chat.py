@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,12 +56,19 @@ async def create_chat_session(
 
 
 @router.get("", response_model=list[ChatSessionResponse])
-async def list_chat_sessions(current_user: FarmerUser, session: Session) -> list[ChatSession]:
+async def list_chat_sessions(
+    current_user: FarmerUser,
+    session: Session,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[ChatSession]:
     return list(
         await session.scalars(
             select(ChatSession)
             .where(ChatSession.user_id == current_user.id)
             .order_by(ChatSession.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     )
 
@@ -108,7 +115,11 @@ async def create_user_message(
 
 @router.get("/{session_id}/messages", response_model=list[MessageResponse])
 async def list_messages(
-    session_id: UUID, current_user: FarmerUser, session: Session
+    session_id: UUID,
+    current_user: FarmerUser,
+    session: Session,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[Message]:
     await _owned_session(session, current_user.id, session_id)
     return list(
@@ -116,5 +127,7 @@ async def list_messages(
             select(Message)
             .where(Message.chat_session_id == session_id)
             .order_by(Message.created_at)
+            .offset(offset)
+            .limit(limit)
         )
     )

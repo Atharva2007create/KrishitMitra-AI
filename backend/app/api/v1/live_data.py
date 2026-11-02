@@ -3,8 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.settings import get_settings
-from app.integrations.government import LiveAgricultureDataService
+from app.integrations.government import LiveAgricultureDataService, get_live_data_service
 from app.integrations.government.http import GovernmentSourceError
 from app.schemas.live_data import (
     MarketPriceResponse,
@@ -16,10 +15,6 @@ from app.schemas.live_data import (
 from app.security.dependencies import FarmerUser
 
 router = APIRouter(prefix="/live", tags=["official live agriculture data"])
-
-
-def get_live_data_service() -> LiveAgricultureDataService:
-    return LiveAgricultureDataService(get_settings())
 
 
 LiveData = Annotated[LiveAgricultureDataService, Depends(get_live_data_service)]

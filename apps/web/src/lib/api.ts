@@ -53,12 +53,12 @@ export const adminApi = {
   system: (token: string) => request<Record<string, unknown>>("/admin/system", token),
 };
 
-function normalizePhone(phone: string) {
+export function normalizePhone(phone: string) {
   const trimmed = phone.trim();
   const digits = trimmed.replace(/\D/g, "");
-  if (digits.length === 10) return `+91${digits}`;
-  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
-  return trimmed.startsWith("+") ? `+${digits}` : trimmed;
+  if (digits.length === 10 && /^[6-9]/.test(digits)) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91") && /^[6-9]/.test(digits.slice(2))) return `+${digits}`;
+  throw new Error("Enter a valid 10-digit Indian mobile number.");
 }
 
 export async function sendOtp(phone: string) {
@@ -73,8 +73,10 @@ export async function verifyOtp(phone: string, otp: string, session: string) {
 
 export const api = {
   me: (token: string) => request<Me>("/me", token), profile: (token: string) => request<Profile>("/farmer/profile", token),
+  createProfile: (token: string, body: Omit<Profile, "id">) => request<Profile>("/farmer/profile", token, { method: "POST", body: JSON.stringify(body) }),
   updateProfile: (token: string, body: Partial<Profile>) => request<Profile>("/farmer/profile", token, { method: "PATCH", body: JSON.stringify(body) }),
-  farms: (token: string) => request<Farm[]>("/farms", token), cycles: (token: string) => request<CropCycle[]>("/crop-cycles", token),
+  farms: (token: string) => request<Farm[]>("/farms", token), createFarm: (token: string, body: Omit<Farm, "id">) => request<Farm>("/farms", token, { method: "POST", body: JSON.stringify(body) }),
+  cycles: (token: string) => request<CropCycle[]>("/crop-cycles", token), createCycle: (token: string, body: Omit<CropCycle, "id">) => request<CropCycle>("/crop-cycles", token, { method: "POST", body: JSON.stringify(body) }),
   categories: (token: string, language: Language) => request<Category[]>(`/problem-categories?language=${language}`, token),
   faqs: (token: string, slug: string, language: Language) => request<Faq[]>(`/problem-categories/${slug}/faqs?language=${language}`, token),
   chats: (token: string) => request<ChatSession[]>("/chat/sessions", token), messages: (token: string, id: string) => request<Message[]>(`/chat/sessions/${id}/messages`, token),

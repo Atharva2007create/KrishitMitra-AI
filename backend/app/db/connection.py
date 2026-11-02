@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from typing import cast
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -28,5 +29,5 @@ async def check_database() -> bool:
     try:
         async with engine.connect() as connection:
             return cast(int, await connection.scalar(text("SELECT 1"))) == 1
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, SQLAlchemyError):
         return False

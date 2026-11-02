@@ -1,8 +1,9 @@
 import hashlib
 
+import httpx
 import pytest
 
-from app.ingestion.acquisition import AcquisitionError, canonicalize_url
+from app.ingestion.acquisition import AcquisitionError, acquire, canonicalize_url
 from app.ingestion.chunking import chunk_blocks
 from app.ingestion.extraction import ExtractionError, extract_html, extract_pdf
 from app.ingestion.normalization import normalize_text
@@ -25,6 +26,29 @@ def test_official_source_allowlist_and_canonicalization() -> None:
         canonicalize_url("https://example.com/farming-advice")
     with pytest.raises(AcquisitionError):
         canonicalize_url("http://www.icar.gov.in/insecure")
+
+
+async def test_acquisition_rejects_redirect_to_unapproved_host() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            302, headers={"location": "http://127.0.0.1/internal"}, request=request
+        )
+    )
+    with pytest.raises(AcquisitionError, match="approved official HTTPS host"):
+        await acquire("https://icar.gov.in/document", transport=transport)
+
+
+async def test_acquisition_enforces_streaming_size_limit() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={"content-type": "application/pdf"},
+            content=b"too large",
+            request=request,
+        )
+    )
+    with pytest.raises(AcquisitionError, match="size limit"):
+        await acquire("https://icar.gov.in/document", max_bytes=4, transport=transport)
 
 
 def test_html_extraction_preserves_table_relationships_and_strips_scripts() -> None:

@@ -12,20 +12,20 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
-    "prettier": "latest",
-    "tailwindcss": "latest",
-    "@tailwindcss/postcss": "latest",
-    "typescript": "latest"
+    "@eslint/eslintrc": "3.3.7",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.0",
+    "prettier": "3.9.9",
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/postcss": "4.3.3",
+    "typescript": "6.0.3"
   }
 }

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -15,6 +15,7 @@ from app.security.cognito import AuthenticationError, CognitoJWTVerifier
 bearer = HTTPBearer(auto_error=False)
 
 
+@lru_cache(maxsize=1)
 def get_jwt_verifier() -> CognitoJWTVerifier:
     return CognitoJWTVerifier(get_settings())
 
@@ -45,17 +46,19 @@ async def get_current_user(
             role=role,
             phone_number=claims.phone_number,
             email=claims.email,
-            last_login_at=datetime.now(UTC),
+            last_login_at=claims.authenticated_at,
         )
         session.add(user)
     else:
-        user.last_login_at = datetime.now(UTC)
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
         user.phone_number = user.phone_number or claims.phone_number
         user.email = user.email or claims.email
-    await session.commit()
-    await session.refresh(user)
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+        if user.last_login_at is None or user.last_login_at < claims.authenticated_at:
+            user.last_login_at = claims.authenticated_at
+    if user in session.new or session.is_modified(user):
+        await session.commit()
+        await session.refresh(user)
     return user
 
 

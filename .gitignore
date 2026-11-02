@@ -40,3 +40,4 @@ backend/.phase5-tools/
 *.tar.gz
 tmp/
 postgres-data/
+.tmp-pip/

@@ -47,6 +47,7 @@ class Evidence:
     vector_score: float
     lexical_score: float
     topic: KnowledgeTopic
+    requires_regulatory_validation: bool
     citation: Citation
 
 
@@ -161,6 +162,7 @@ class RetrievalService:
                     vector_score=float(vector_score),
                     lexical_score=float(lexical_score),
                     topic=chunk.topic,
+                    requires_regulatory_validation=chunk.requires_regulatory_validation,
                     citation=Citation(
                         organization=source.organization,
                         document_title=document.title,

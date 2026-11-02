@@ -3,10 +3,26 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
-const screens = ["login", "help", "home", "weather", "market", "guidance", "ask", "crop", "advisory", "faqs", "upload", "history", "notifications", "profile"];
+const screens = [
+  "login",
+  "help",
+  "home",
+  "weather",
+  "market",
+  "guidance",
+  "ask",
+  "crop",
+  "advisory",
+  "faqs",
+  "upload",
+  "history",
+  "notifications",
+  "profile",
+];
 
 test("Phase 6 mobile defines the complete approved screen inventory", () => {
-  for (const screen of screens) assert.match(app, new RegExp(`[\"']${screen}[\"']`), `missing ${screen}`);
+  for (const screen of screens)
+    assert.match(app, new RegExp(`[\"']${screen}[\"']`), `missing ${screen}`);
 });
 
 test("mobile image analysis follows the secure attachment pipeline", () => {
@@ -17,6 +33,14 @@ test("mobile image analysis follows the secure attachment pipeline", () => {
     assert.ok(next > cursor, `${route} is missing or out of order`);
     cursor = next;
   }
+});
+
+test("mobile Cognito OTP uses the documented SMS challenge response", () => {
+  assert.match(app, /SMS_OTP_CODE: otp\.trim\(\)/);
+  assert.doesNotMatch(app, /SMS_OTP: otp/);
+  assert.match(app, /normalizeIndianPhone\(phone\)/);
+  assert.match(app, /Resend OTP/);
+  assert.match(app, /Change number/);
 });
 
 test("mobile live-data gaps are not filled with invented values", () => {

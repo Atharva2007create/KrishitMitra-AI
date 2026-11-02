@@ -193,6 +193,26 @@ def test_lambda_rejects_untrusted_s3_event() -> None:
     assert error.value.code == "INVALID_OBJECT_KEY"
 
 
+def test_lambda_analysis_claim_is_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = _load_lambda()
+
+    class AvailableS3:
+        def put_object(self, **kwargs: object) -> None:
+            assert kwargs["IfNoneMatch"] == "*"
+
+    monkeypatch.setattr(handler.boto3, "client", lambda *args, **kwargs: AvailableS3())
+    assert handler._claim_analysis("bucket", "hash") is True
+
+    class ClaimedS3:
+        def put_object(self, **_: object) -> None:
+            raise handler.ClientError(
+                {"Error": {"Code": "PreconditionFailed", "Message": "claimed"}}, "PutObject"
+            )
+
+    monkeypatch.setattr(handler.boto3, "client", lambda *args, **kwargs: ClaimedS3())
+    assert handler._claim_analysis("bucket", "hash") is False
+
+
 def test_lambda_validates_image_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = _load_lambda()
 

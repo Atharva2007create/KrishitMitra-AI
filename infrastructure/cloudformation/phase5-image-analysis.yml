@@ -56,6 +56,9 @@ Resources:
                   - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-results/*
                   - !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-hashes/*
               - Effect: Allow
+                Action: s3:DeleteObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ImagesBucketName}/analysis-hashes/*.claim
+              - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref GeminiSecretArn
       Tags:

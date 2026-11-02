@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -76,6 +77,34 @@ def _result_key(key: str) -> str:
 def _hash_key(content_hash: str, model: str = MODEL_NAME) -> str:
     safe_model = model.replace("/", "_")
     return f"analysis-hashes/{safe_model}/{content_hash}.json"
+
+
+def _claim_key(content_hash: str) -> str:
+    safe_model = MODEL_NAME.replace("/", "_")
+    return f"analysis-hashes/{safe_model}/{content_hash}.claim"
+
+
+def _claim_analysis(bucket: str, content_hash: str) -> bool:
+    try:
+        boto3.client("s3", region_name=AWS_REGION).put_object(
+            Bucket=bucket,
+            Key=_claim_key(content_hash),
+            Body=b"processing",
+            ContentType="text/plain",
+            ServerSideEncryption="AES256",
+            IfNoneMatch="*",
+        )
+        return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {"PreconditionFailed", "412"}:
+            return False
+        raise
+
+
+def _release_claim(bucket: str, content_hash: str) -> None:
+    boto3.client("s3", region_name=AWS_REGION).delete_object(
+        Bucket=bucket, Key=_claim_key(content_hash)
+    )
 
 
 def _write_result(bucket: str, key: str, value: dict[str, Any]) -> None:
@@ -212,6 +241,8 @@ def _reuse(bucket: str, content_hash: str) -> dict[str, Any] | None:
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     bucket = ""
     key = ""
+    content_hash = ""
+    claimed = False
     try:
         bucket, key = _event_object(event)
         _write_result(bucket, key, {"status": "PROCESSING", "model": MODEL_NAME})
@@ -220,36 +251,59 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result = _reuse(bucket, content_hash)
         reused = result is not None
         if result is None:
-            visual = _analyze(image, content_type)
-            model_used = str(visual.pop("_model_used", MODEL_NAME))
-            final_status = "COMPLETED" if bool(visual.get("image_sufficient")) else "IMAGE_INSUFFICIENT"
-            result = {
-                "status": final_status,
-                "content_hash": content_hash,
-                "model": model_used,
-                "quality_assessment": visual["quality"],
-                "observed_symptoms": {"observations": visual["observations"]},
-                "candidate_issues": visual["candidate_issues"],
-                "evidence": {
-                    "source": "GEMINI_VISUAL_OBSERVATION",
-                    "authoritative": False,
-                    "follow_up_questions": visual.get("follow_up_questions", []),
-                },
-                "processed_at": datetime.now(UTC).isoformat(),
-            }
-            boto3.client("s3", region_name=AWS_REGION).put_object(
-                Bucket=bucket,
-                Key=_hash_key(content_hash, model_used),
-                Body=json.dumps(result, ensure_ascii=False).encode(),
-                ContentType="application/json",
-                ServerSideEncryption="AES256",
-            )
+            claimed = _claim_analysis(bucket, content_hash)
+            if not claimed:
+                for _ in range(10):
+                    time.sleep(0.5)
+                    result = _reuse(bucket, content_hash)
+                    if result is not None:
+                        break
+                if result is None:
+                    return {"statusCode": 202, "status": "PROCESSING", "reused": False}
+                reused = True
+            else:
+                visual = _analyze(image, content_type)
+                model_used = str(visual.pop("_model_used", MODEL_NAME))
+                final_status = (
+                    "COMPLETED" if bool(visual.get("image_sufficient")) else "IMAGE_INSUFFICIENT"
+                )
+                result = {
+                    "status": final_status,
+                    "content_hash": content_hash,
+                    "model": model_used,
+                    "quality_assessment": visual["quality"],
+                    "observed_symptoms": {"observations": visual["observations"]},
+                    "candidate_issues": visual["candidate_issues"],
+                    "evidence": {
+                        "source": "GEMINI_VISUAL_OBSERVATION",
+                        "authoritative": False,
+                        "follow_up_questions": visual.get("follow_up_questions", []),
+                    },
+                    "processed_at": datetime.now(UTC).isoformat(),
+                }
+                boto3.client("s3", region_name=AWS_REGION).put_object(
+                    Bucket=bucket,
+                    Key=_hash_key(content_hash, model_used),
+                    Body=json.dumps(result, ensure_ascii=False).encode(),
+                    ContentType="application/json",
+                    ServerSideEncryption="AES256",
+                )
         result["attachment_id"] = metadata["attachment-id"]
         result["reused"] = reused
         _write_result(bucket, key, result)
+        if claimed:
+            try:
+                _release_claim(bucket, content_hash)
+            except Exception:
+                logger.exception("image_analysis_claim_release_failed")
         logger.info("image_analysis_completed", extra={"status": result["status"]})
         return {"statusCode": 200, "status": result["status"], "reused": reused}
     except ImagePipelineError as exc:
+        if claimed and bucket and content_hash:
+            try:
+                _release_claim(bucket, content_hash)
+            except Exception:
+                logger.exception("image_analysis_claim_release_failed")
         if bucket and key:
             _write_result(
                 bucket,
@@ -263,3 +317,26 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             )
         logger.warning("image_analysis_rejected", extra={"code": exc.code})
         return {"statusCode": 422, "status": "FAILED", "error_code": exc.code}
+    except Exception:
+        error_code = "INTERNAL_PIPELINE_ERROR"
+        if claimed and bucket and content_hash:
+            try:
+                _release_claim(bucket, content_hash)
+            except Exception:
+                logger.exception("image_analysis_claim_release_failed")
+        if bucket and key:
+            try:
+                _write_result(
+                    bucket,
+                    key,
+                    {
+                        "status": "FAILED",
+                        "error_code": error_code,
+                        "model": MODEL_NAME,
+                        "processed_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+            except Exception:
+                logger.exception("image_analysis_failure_state_write_failed")
+        logger.exception("image_analysis_unexpected_failure")
+        return {"statusCode": 500, "status": "FAILED", "error_code": error_code}

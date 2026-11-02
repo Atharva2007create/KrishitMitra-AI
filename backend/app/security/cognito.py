@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import jwt
 from jwt import PyJWKClient
@@ -20,6 +21,7 @@ class CognitoClaims:
     phone_number: str | None
     email: str | None
     groups: frozenset[str]
+    authenticated_at: datetime
 
 
 class CognitoJWTVerifier:
@@ -38,7 +40,7 @@ class CognitoJWTVerifier:
             signing_key = await asyncio.to_thread(self._jwks_client.get_signing_key_from_jwt, token)
             unverified = jwt.decode(token, options={"verify_signature": False})
             token_use = unverified.get("token_use")
-            options: Options = {"require": ["exp", "iss", "sub", "token_use"]}
+            options: Options = {"require": ["exp", "iat", "iss", "sub", "token_use"]}
             audience = self.settings.aws_cognito_client_id if token_use == "id" else None
             if token_use == "access":
                 options["verify_aud"] = False
@@ -65,6 +67,9 @@ class CognitoJWTVerifier:
                 phone_number=claims.get("phone_number"),
                 email=claims.get("email"),
                 groups=groups,
+                authenticated_at=datetime.fromtimestamp(
+                    int(claims.get("auth_time", claims["iat"])), tz=UTC
+                ),
             )
         except (InvalidTokenError, KeyError, TypeError, ValueError) as exc:
             raise AuthenticationError("Invalid or expired authentication token") from exc

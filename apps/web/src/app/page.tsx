@@ -23,6 +23,7 @@ export default function Home() {
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   useEffect(() => {
     queueMicrotask(() => {
       const saved = localStorage.getItem("krishimitra.token") ?? "";
@@ -71,7 +72,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [token, language]);
+  }, [token, language, refreshVersion]);
   function authenticated(value: string) {
     localStorage.setItem("krishimitra.token", value);
     setLoading(true);
@@ -107,6 +108,7 @@ export default function Home() {
         error,
         authenticated,
         logout,
+        refresh: () => setRefreshVersion((value) => value + 1),
       }}
     />
   );

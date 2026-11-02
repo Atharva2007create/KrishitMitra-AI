@@ -74,6 +74,12 @@ class FailingAI(FakeAI):
         raise AIProviderError("simulated model outage")
 
 
+class InventingNumericAI(FakeAI):
+    async def generate_grounded_answer(self, request: GenerationRequest) -> GeneratedAnswer:
+        self.requests.append(request)
+        return GeneratedAnswer(answer="Apply 90 kg per hectare.")
+
+
 async def test_faq_generation_retries_transient_model_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -258,6 +264,7 @@ async def test_category_and_grounded_faq_localization(
         ("What's today's Tur price?", "LIVE_DATA_UNAVAILABLE"),
         ("Will it rain tomorrow?", "LIVE_DATA_UNAVAILABLE"),
         ("Give pesticide dosage", "REQUIRES_REGULATORY_VALIDATION"),
+        ("How many ml per litre of pesticide?", "REQUIRES_REGULATORY_VALIDATION"),
         ("I want to upload a photo", "REQUIRES_IMAGE_ANALYSIS"),
         ("How should I grow wheat?", "INSUFFICIENT"),
     ],
@@ -373,6 +380,28 @@ async def test_model_failure_preserves_question_without_assistant_duplicate(
         ).all()
     )
     assert counts == {"USER": 1}
+
+
+async def test_live_answer_rejects_unsupported_numeric_claim(
+    client: AsyncClient,
+    session: AsyncSession,
+    users: tuple[User, User, User],
+    authenticate: Callable[[User], None],
+) -> None:
+    category, _, _ = await seed_phase4(session, users[0])
+    authenticate(users[0])
+    app.dependency_overrides[get_assistance_embedding_provider] = lambda: FixedEmbeddings()
+    app.dependency_overrides[get_ai_provider] = lambda: InventingNumericAI()
+    started = await client.post(
+        "/api/v1/assistance/sessions", json={"problem_category_id": str(category.id)}
+    )
+    result = await client.post(
+        f"/api/v1/assistance/sessions/{started.json()['id']}/questions",
+        json={"question": "What spacing evidence is available?"},
+    )
+    assert result.status_code == 200
+    assert result.json()["evidence_status"] == "INSUFFICIENT"
+    assert "UNSUPPORTED_NUMERIC_CLAIM" in result.json()["safety_flags"]
 
 
 async def test_attachment_presign_and_cross_user_ownership(

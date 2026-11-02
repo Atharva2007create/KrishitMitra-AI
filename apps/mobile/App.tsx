@@ -46,6 +46,12 @@ type Profile = {
   taluka: string;
   village?: string;
 };
+type Farm = {
+  id: string;
+  name?: string;
+  area_value: string;
+  area_unit: "ACRE" | "HECTARE" | "GUNTHA";
+};
 type Cycle = {
   id: string;
   crop_name: string;
@@ -129,6 +135,18 @@ async function auth(target: string, body: Record<string, unknown>) {
   const v = await r.json();
   if (!r.ok) throw new Error(v.message ?? "Authentication failed");
   return v;
+}
+export function normalizeIndianPhone(phone: string) {
+  const digits = phone.trim().replace(/\D/g, "");
+  if (digits.length === 10 && /^[6-9]/.test(digits)) return `+91${digits}`;
+  if (
+    digits.length === 12 &&
+    digits.startsWith("91") &&
+    /^[6-9]/.test(digits.slice(2))
+  ) {
+    return `+${digits}`;
+  }
+  throw new Error("Enter a valid 10-digit Indian mobile number.");
 }
 async function request<T>(
   path: string,
@@ -294,23 +312,32 @@ function Login({
     [otp, setOtp] = useState(""),
     [session, setSession] = useState(""),
     [busy, setBusy] = useState(false);
+  async function startChallenge() {
+    const username = normalizeIndianPhone(phone);
+    const v = await auth("InitiateAuth", {
+      AuthFlow: "USER_AUTH",
+      ClientId: CLIENT_ID,
+      AuthParameters: { USERNAME: username, PREFERRED_CHALLENGE: "SMS_OTP" },
+    });
+    if (v.ChallengeName !== "SMS_OTP" || !v.Session) {
+      throw new Error("Cognito did not start an SMS OTP challenge.");
+    }
+    setOtp("");
+    setSession(v.Session);
+  }
   async function submit() {
     setBusy(true);
     try {
       if (!session) {
-        const v = await auth("InitiateAuth", {
-          AuthFlow: "USER_AUTH",
-          ClientId: CLIENT_ID,
-          AuthParameters: { USERNAME: phone, PREFERRED_CHALLENGE: "SMS_OTP" },
-        });
-        if (!v.Session) throw new Error("SMS OTP challenge did not start.");
-        setSession(v.Session);
+        await startChallenge();
       } else {
+        const username = normalizeIndianPhone(phone);
+        if (!otp.trim()) throw new Error("Enter the OTP sent by SMS.");
         const v = await auth("RespondToAuthChallenge", {
           ClientId: CLIENT_ID,
           ChallengeName: "SMS_OTP",
           Session: session,
-          ChallengeResponses: { USERNAME: phone, SMS_OTP: otp },
+          ChallengeResponses: { USERNAME: username, SMS_OTP_CODE: otp.trim() },
         });
         const token =
           v.AuthenticationResult?.AccessToken ??
@@ -357,8 +384,39 @@ function Login({
               value={otp}
               onChangeText={setOtp}
               keyboardType="number-pad"
-              placeholder="Enter 6-digit OTP"
+              placeholder="Enter the OTP from SMS"
             />
+            <View style={s.row}>
+              <Pressable
+                style={s.secondary}
+                disabled={busy}
+                onPress={() => {
+                  setSession("");
+                  setOtp("");
+                }}
+              >
+                <Text style={s.secondaryText}>Change number</Text>
+              </Pressable>
+              <Pressable
+                style={s.secondary}
+                disabled={busy}
+                onPress={async () => {
+                  setBusy(true);
+                  try {
+                    await startChallenge();
+                  } catch (e) {
+                    Alert.alert(
+                      "Login",
+                      e instanceof Error ? e.message : "Unable to resend OTP",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Text style={s.secondaryText}>Resend OTP</Text>
+              </Pressable>
+            </View>
           </>
         )}
         <Pressable style={s.primary} onPress={submit} disabled={busy}>
@@ -383,27 +441,31 @@ export default function App() {
     [language, setLanguage] = useState<Language>("en"),
     [screen, setScreen] = useState<Screen>("login"),
     [profile, setProfile] = useState<Profile | null>(null),
+    [farms, setFarms] = useState<Farm[]>([]),
     [cycles, setCycles] = useState<Cycle[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
     [chats, setChats] = useState<Chat[]>([]),
-    [selected, setSelected] = useState<Category | null>(null);
+    [selected, setSelected] = useState<Category | null>(null),
+    [refreshVersion, setRefreshVersion] = useState(0);
   const L = labels[language];
   useEffect(() => {
     if (!token) return;
     Promise.all([
       request<{ profile?: Profile }>("/me", token),
+      request<Farm[]>("/farms", token),
       request<Cycle[]>("/crop-cycles", token),
       request<Category[]>(`/problem-categories?language=${language}`, token),
       request<Chat[]>("/chat/sessions", token),
     ])
-      .then(([me, cats, groups, history]) => {
+      .then(([me, farmRows, cycleRows, groups, history]) => {
         setProfile(me.profile ?? null);
-        setCycles(cats);
+        setFarms(farmRows);
+        setCycles(cycleRows);
         setCategories(groups);
         setChats(history);
       })
       .catch((e) => Alert.alert("KrishiMitra", e.message));
-  }, [token, language]);
+  }, [token, language, refreshVersion]);
   const shell = { language, setLanguage, setScreen, name: profile?.full_name };
   if (!token && screen !== "help")
     return (
@@ -653,7 +715,68 @@ export default function App() {
       />
     );
   return (
-    <Shell {...shell} title={L.profile}>
+    <ProfileOnboarding
+      {...shell}
+      token={token}
+      profile={profile}
+      farms={farms}
+      cycles={cycles}
+      refresh={() => setRefreshVersion((value) => value + 1)}
+      logout={() => {
+        setToken("");
+        setScreen("login");
+      }}
+    />
+  );
+}
+
+function ProfileOnboarding({
+  token,
+  profile,
+  farms,
+  cycles,
+  refresh,
+  logout,
+  ...shell
+}: {
+  token: string;
+  profile: Profile | null;
+  farms: Farm[];
+  cycles: Cycle[];
+  refresh: () => void;
+  logout: () => void;
+  language: Language;
+  setLanguage: (v: Language) => void;
+  setScreen: (v: Screen) => void;
+  name?: string;
+}) {
+  const [name, setName] = useState(""),
+    [stateName, setStateName] = useState("Maharashtra"),
+    [district, setDistrict] = useState(""),
+    [taluka, setTaluka] = useState(""),
+    [village, setVillage] = useState(""),
+    [farmName, setFarmName] = useState(""),
+    [area, setArea] = useState(""),
+    [sowingDate, setSowingDate] = useState(""),
+    [variety, setVariety] = useState(""),
+    [busy, setBusy] = useState(false);
+  async function save(path: string, body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      await request(path, token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      refresh();
+    } catch (e) {
+      Alert.alert("Profile", e instanceof Error ? e.message : "Unable to save");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const farm = farms[0];
+  return (
+    <Shell {...shell} title="My Profile">
       <Card tone="green">
         <Text style={s.profileIcon}>👨🏽‍🌾</Text>
         <Text style={s.centerTitle}>
@@ -667,32 +790,131 @@ export default function App() {
             : "Complete your farmer profile"}
         </Text>
       </Card>
+      {!profile && (
+        <Card>
+          <Text style={s.section}>Complete farmer profile</Text>
+          <TextInput
+            style={s.input}
+            placeholder="Full name"
+            value={name}
+            onChangeText={setName}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="State"
+            value={stateName}
+            onChangeText={setStateName}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="District"
+            value={district}
+            onChangeText={setDistrict}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="Taluka"
+            value={taluka}
+            onChangeText={setTaluka}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="Village (optional)"
+            value={village}
+            onChangeText={setVillage}
+          />
+          <Pressable
+            disabled={busy || !name || !district || !taluka}
+            style={s.primary}
+            onPress={() =>
+              save("/farmer/profile", {
+                full_name: name,
+                preferred_language: shell.language,
+                state: stateName,
+                district,
+                taluka,
+                village: village || null,
+              })
+            }
+          >
+            <Text style={s.whiteBold}>Save profile</Text>
+          </Pressable>
+        </Card>
+      )}
+      {profile && !farm && (
+        <Card>
+          <Text style={s.section}>Add your farm</Text>
+          <TextInput
+            style={s.input}
+            placeholder="Farm name"
+            value={farmName}
+            onChangeText={setFarmName}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="Area in acres"
+            keyboardType="decimal-pad"
+            value={area}
+            onChangeText={setArea}
+          />
+          <Pressable
+            disabled={busy || !area}
+            style={s.primary}
+            onPress={() =>
+              save("/farms", {
+                name: farmName || null,
+                area_value: area,
+                area_unit: "ACRE",
+                state: profile.state,
+                district: profile.district,
+                taluka: profile.taluka,
+                village: profile.village ?? null,
+                soil_type: null,
+                irrigation_type: null,
+              })
+            }
+          >
+            <Text style={s.whiteBold}>Save farm</Text>
+          </Pressable>
+        </Card>
+      )}
+      {farm && !cycles.length && (
+        <Card>
+          <Text style={s.section}>Start a Tur crop cycle</Text>
+          <TextInput
+            style={s.input}
+            placeholder="Sowing date (YYYY-MM-DD)"
+            value={sowingDate}
+            onChangeText={setSowingDate}
+          />
+          <TextInput
+            style={s.input}
+            placeholder="Variety (optional)"
+            value={variety}
+            onChangeText={setVariety}
+          />
+          <Pressable
+            disabled={busy || !/^\d{4}-\d{2}-\d{2}$/.test(sowingDate)}
+            style={s.primary}
+            onPress={() =>
+              save("/crop-cycles", {
+                farm_id: farm.id,
+                crop_name: "TUR",
+                crop_variety: variety || null,
+                sowing_date: sowingDate,
+                status: "ACTIVE",
+              })
+            }
+          >
+            <Text style={s.whiteBold}>Save crop cycle</Text>
+          </Pressable>
+        </Card>
+      )}
       <Text style={s.section}>Language Preferences</Text>
       <Card>
-        <Languages value={language} onChange={setLanguage} />
+        <Languages value={shell.language} onChange={shell.setLanguage} />
       </Card>
-      {[
-        ["crop", "🌱", "Crop Cycles"],
-        ["history", "◴", "Saved Guidance"],
-        ["help", "?", "Help & Support"],
-      ].map(([id, i, h]) => (
-        <Pressable
-          key={id}
-          style={s.feature}
-          onPress={() => setScreen(id as Screen)}
-        >
-          <Text style={s.icon}>{i}</Text>
-          <Text style={[s.bold, s.flex]}>{h}</Text>
-          <Text>→</Text>
-        </Pressable>
-      ))}
-      <Pressable
-        style={s.logout}
-        onPress={() => {
-          setToken("");
-          setScreen("login");
-        }}
-      >
+      <Pressable style={s.logout} onPress={logout}>
         <Text style={s.logoutText}>↪ Logout</Text>
       </Pressable>
     </Shell>
@@ -1132,6 +1354,7 @@ function Upload({
       const analysisId = u.analysis_id ?? queued.id;
       if (!analysisId) throw new Error("Analysis identifier was not returned");
       setState("Analyzing image…");
+      let terminal = false;
       for (let attempt = 0; attempt < 20; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const value = await request<Record<string, unknown>>(
@@ -1141,9 +1364,15 @@ function Upload({
         setAnalysis(value);
         const status = String(value.status ?? "PROCESSING");
         setState(status.replaceAll("_", " "));
-        if (["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(status))
+        if (["COMPLETED", "FAILED", "IMAGE_INSUFFICIENT"].includes(status)) {
+          terminal = true;
           break;
+        }
       }
+      if (!terminal)
+        setState(
+          "Analysis is taking longer than expected. Tap Analyze Image to retry.",
+        );
     } catch (e) {
       setState(e instanceof Error ? e.message : "Analysis failed");
     }
