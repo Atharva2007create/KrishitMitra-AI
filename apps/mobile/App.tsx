@@ -148,6 +148,21 @@ export function normalizeIndianPhone(phone: string) {
   }
   throw new Error("Enter a valid 10-digit Indian mobile number.");
 }
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+let unauthorizedHandler: (() => void) | undefined;
+function setUnauthorizedHandler(handler: (() => void) | undefined) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = undefined;
+  };
+}
 async function request<T>(
   path: string,
   token: string,
@@ -163,7 +178,9 @@ async function request<T>(
   });
   if (!r.ok) {
     const v = await r.json().catch(() => ({}));
-    throw new Error(
+    if (r.status === 401) unauthorizedHandler?.();
+    throw new ApiError(
+      r.status,
       typeof v.detail === "string"
         ? v.detail
         : (v.detail?.message ?? `Request failed (${r.status})`),
@@ -448,6 +465,20 @@ export default function App() {
     [selected, setSelected] = useState<Category | null>(null),
     [refreshVersion, setRefreshVersion] = useState(0);
   const L = labels[language];
+  useEffect(
+    () =>
+      setUnauthorizedHandler(() => {
+        setToken("");
+        setProfile(null);
+        setFarms([]);
+        setCycles([]);
+        setCategories([]);
+        setChats([]);
+        setSelected(null);
+        setScreen("login");
+      }),
+    [],
+  );
   useEffect(() => {
     if (!token) return;
     Promise.all([

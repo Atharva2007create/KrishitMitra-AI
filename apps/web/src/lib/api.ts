@@ -6,11 +6,20 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? "";
 const COGNITO = process.env.NEXT_PUBLIC_COGNITO_ENDPOINT ?? `https://cognito-idp.${REGION}.amazonaws.com`;
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
+let unauthorizedHandler: (() => void) | undefined;
+export function setUnauthorizedHandler(handler: (() => void) | undefined) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = undefined;
+  };
+}
+
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}/api/v1${path}`, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } });
   if (!response.ok) {
     const value = await response.json().catch(() => ({})) as { detail?: string | { message?: string }; message?: string };
     const detail = typeof value.detail === "string" ? value.detail : value.detail?.message;
+    if (response.status === 401) unauthorizedHandler?.();
     throw new ApiError(response.status, detail ?? value.message ?? `Request failed (${response.status})`);
   }
   return response.status === 204 ? (undefined as T) : response.json() as Promise<T>;

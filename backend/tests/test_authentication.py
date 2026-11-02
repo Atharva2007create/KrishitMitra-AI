@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.exceptions import PyJWKClientError
 
 from app.core.settings import Settings
 from app.security.cognito import AuthenticationError, CognitoJWTVerifier
@@ -57,3 +58,16 @@ async def test_invalid_cognito_token_is_rejected(overrides: dict[str, object]) -
     verifier, key = build_verifier()
     with pytest.raises(AuthenticationError):
         await verifier.verify(token(key, **overrides))
+
+
+async def test_jwks_lookup_failure_is_rejected_as_authentication_error() -> None:
+    verifier, _ = build_verifier()
+
+    def fail_lookup(_: str) -> object:
+        raise PyJWKClientError("unknown signing key")
+
+    verifier._jwks_client = SimpleNamespace(  # type: ignore[assignment]
+        get_signing_key_from_jwt=fail_lookup
+    )
+    with pytest.raises(AuthenticationError, match="Invalid or expired"):
+        await verifier.verify("not-a-jwt")

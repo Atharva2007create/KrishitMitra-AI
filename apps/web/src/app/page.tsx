@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { FarmerApp } from "@/components/FarmerApp";
-import { api } from "@/lib/api";
+import { api, setUnauthorizedHandler } from "@/lib/api";
 import type {
   Category,
   ChatSession,
@@ -41,6 +41,20 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("krishimitra.language", language);
   }, [language]);
+  useEffect(
+    () =>
+      setUnauthorizedHandler(() => {
+        localStorage.removeItem("krishimitra.token");
+        setToken("");
+        setMe(null);
+        setFarms([]);
+        setCycles([]);
+        setCategories([]);
+        setChats([]);
+        setScreen("login");
+      }),
+    [],
+  );
   useEffect(() => {
     if (!token) return;
     let active = true;

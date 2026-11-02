@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import jwt
 from jwt import PyJWKClient
-from jwt.exceptions import InvalidTokenError
+from jwt.exceptions import InvalidTokenError, PyJWKClientError
 from jwt.types import Options
 
 from app.core.settings import Settings
@@ -71,5 +71,5 @@ class CognitoJWTVerifier:
                     int(claims.get("auth_time", claims["iat"])), tz=UTC
                 ),
             )
-        except (InvalidTokenError, KeyError, TypeError, ValueError) as exc:
+        except (InvalidTokenError, PyJWKClientError, KeyError, TypeError, ValueError) as exc:
             raise AuthenticationError("Invalid or expired authentication token") from exc

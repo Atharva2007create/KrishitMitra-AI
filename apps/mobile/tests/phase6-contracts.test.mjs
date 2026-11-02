@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
 
 const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
 const screens = [
@@ -46,4 +47,25 @@ test("mobile Cognito OTP uses the documented SMS challenge response", () => {
 test("mobile live-data gaps are not filled with invented values", () => {
   assert.match(app, /No values are estimated/);
   assert.match(app, /Not available from the current backend contract/);
+});
+
+test("mobile phone normalization accepts Indian forms and rejects malformed values", () => {
+  const source = app.match(
+    /export function normalizeIndianPhone\(phone: string\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  assert.ok(source, "normalizeIndianPhone implementation is missing");
+  const normalizePhone = vm.runInNewContext(
+    `(${source.replace("export ", "").replace("phone: string", "phone")})`,
+  );
+  assert.equal(normalizePhone("9876543210"), "+919876543210");
+  assert.equal(normalizePhone("+91 98765 43210"), "+919876543210");
+  assert.throws(() => normalizePhone("12345"), /valid 10-digit/);
+  assert.throws(() => normalizePhone("91919876543210"), /valid 10-digit/);
+});
+
+test("mobile clears farmer authentication on any backend 401", () => {
+  assert.match(app, /r\.status === 401.*unauthorizedHandler/s);
+  assert.match(app, /setUnauthorizedHandler/);
+  assert.match(app, /setToken\(""\)/);
+  assert.match(app, /setScreen\("login"\)/);
 });
